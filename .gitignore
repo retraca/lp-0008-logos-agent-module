@@ -1,0 +1,22 @@
+# Build directories
+build/
+target/
+generated/
+sdk_generated/
+
+# Rust artifacts (keep the static libs for the Qt build)
+*.d
+*.rlib
+*.rmeta
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# macOS
+.DS_Store
+*.xcworkspace

@@ -1,0 +1,28 @@
+{
+  "name": "agent_module",
+  "version": "0.0.1",
+  "description": "LP-0008 autonomous AI agent: LEZ shielded wallet + Logos Storage + Logos Messaging + A2A coordination",
+  "author": "",
+  "type": "core",
+  "category": "agent",
+  "interface": "universal",
+  "main": "agent_module_plugin",
+  "codegen": {
+    "impl_header": "src/agent_module_impl.h"
+  },
+  "dependencies": [
+    "chat_module",
+    "delivery_module",
+    "storage_module"
+  ],
+  "interface_dependencies": [
+    { "name": "lez_wallet", "file": "interfaces/lez_wallet.h", "impl_class": "ILezWallet" },
+    { "name": "skill", "file": "interfaces/skill.h", "impl_class": "ISkill" }
+  ],
+  "include": [],
+  "capabilities": [],
+  "nix": {
+    "packages": { "runtime": ["nlohmann_json"] },
+    "cmake": { "extra_include_dirs": ["interfaces"] }
+  }
+}

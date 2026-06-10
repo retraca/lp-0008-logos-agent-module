@@ -1,0 +1,26 @@
+{
+  "name": "lez_wallet_module",
+  "version": "0.1.0",
+  "type": "core",
+  "interface": "universal",
+  "category": "blockchain",
+  "description": "Shielded LEZ wallet and LEZ program interface. Wraps lez-wallet-core (Rust) via FFI. Required by LP-0008 agent_module for all wallet.* and program.* skills.",
+  "main": "lez_wallet_module_plugin",
+  "dependencies": [],
+  "interface_dependencies": [],
+  "capabilities": [
+    "lez.wallet.shielded",
+    "lez.program.query",
+    "lez.program.call",
+    "lez.program.deploy"
+  ],
+  "nix": {
+    "buildInputs": [],
+    "external_libraries": ["liblez_wallet_core"],
+    "find_packages": [],
+    "extra_cmake_flags": [
+      "-DLEZ_WALLET_CORE_DIR=${LEZ_WALLET_CORE_DIR}"
+    ]
+  },
+  "_build_note": "Requires Nix + Qt6 + the compiled liblez_wallet_core from lez-wallet-core/target/release/. Set LEZ_WALLET_CORE_DIR=<path/to/lez-wallet-core/target/release> before nix develop / cmake. See BUILD.md."
+}

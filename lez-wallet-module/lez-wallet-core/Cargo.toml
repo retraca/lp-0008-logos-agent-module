@@ -1,0 +1,81 @@
+[package]
+name = "lez-wallet-core"
+version = "0.1.0"
+edition = "2021"
+description = "Pure-Rust core for lez_wallet_module: encrypted keystore, key derivation, and WalletCore bridge"
+license = "MIT OR Apache-2.0"
+
+# ---- Feature flags -------------------------------------------------------
+# `standalone-tests` (default): enables the keystore + key-derivation unit
+# tests without pulling in the heavy lez-build dependency tree. Run these
+# on any machine:
+#   cargo test
+#
+# `lez-bridge`: enables provider.rs and ffi.rs, which depend on lez-build crates.
+# This requires the full toolchain (Risc0, logos-blockchain-circuits, lez-build).
+#
+# IMPORTANT: `lez-bridge` path deps are listed in a separate Cargo.toml section
+# (see below) and are NOT activated unless the feature flag is explicitly set.
+# Cargo resolves *all* path deps at parse time regardless of feature flags, so
+# the lez-build crates MUST be present on disk when `lez-bridge` is active.
+# On a machine without lez-build, only the default feature set is usable.
+[features]
+default = []
+lez-bridge = [
+    "dep:tokio",
+    "dep:anyhow",
+    "dep:bip39",
+    "dep:hex",
+    "dep:nssa_core",
+    "dep:nssa",
+    "dep:wallet",
+    "dep:sequencer_service_rpc",
+    "dep:common",
+]
+
+# ---- Shared light deps (always present) ----------------------------------
+[dependencies]
+aes-gcm    = "0.10"
+argon2     = "0.5"
+rand       = "0.8"
+base64     = { version = "0.22", features = ["alloc"] }
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+base58     = "0.2"
+thiserror  = "1"
+zeroize    = { version = "1", features = ["derive"] }
+sha2       = "0.10"
+hex        = { version = "0.4", optional = true }
+
+# ---- Optional deps for lez-bridge feature --------------------------------
+# These are pulled in only with --features lez-bridge, but Cargo still needs
+# to find them on disk when that feature is active. The lez-build path deps
+# (wallet, nssa, etc.) are NOT listed here because they would cause parse-time
+# resolution failures on machines without lez-build.
+#
+# Instead, provider.rs uses `extern crate` declarations gated with
+# `#[cfg(feature = "lez-bridge")]` and the lez-build crates are declared in
+# a companion workspace-level Cargo.toml (see ../Cargo.toml) that is only
+# activated when building from the lez-build workspace context.
+#
+# For standalone development on this machine, omit --features lez-bridge.
+tokio               = { version = "1", features = ["rt", "rt-multi-thread", "macros"], optional = true }
+anyhow              = { version = "1", optional = true }
+bip39               = { version = "2", optional = true }
+
+# lez-build path deps (relative to this crate's location; resolved when built from
+# the lez-build workspace with --features lez-bridge).
+nssa_core           = { path = "../../lez-build/nssa/core", optional = true }
+nssa                = { path = "../../lez-build/nssa", optional = true }
+wallet              = { path = "../../lez-build/wallet", optional = true }
+sequencer_service_rpc = { path = "../../lez-build/sequencer/service/rpc", optional = true }
+common              = { path = "../../lez-build/common", optional = true }
+
+[lib]
+name       = "lez_wallet_core"
+# cdylib: for Qt module FFI. rlib: for Rust tests and the lez-bridge feature.
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dev-dependencies]
+# Always available for tests
+serde_json = "1"
