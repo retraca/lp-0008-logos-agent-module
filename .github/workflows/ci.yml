@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Rust unit tests (no chain needed)
+  # --------------------------------------------------------------------------
+  rust-unit:
+    name: Rust unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lez-wallet-module/lez-wallet-core
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            lez-wallet-module/lez-wallet-core/target
+          key: rust-unit-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
+
+      - name: Run unit tests (no lez-bridge, no chain)
+        run: cargo test
+
+  # --------------------------------------------------------------------------
+  # Rust check with lez-bridge feature (compile only, no chain)
+  # --------------------------------------------------------------------------
+  rust-lez-bridge-check:
+    name: Rust lez-bridge compile check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: lez-wallet-module/lez-wallet-core
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libclang-dev clang cmake ninja-build
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            lez-wallet-module/lez-wallet-core/target
+          key: rust-bridge-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
+
+      - name: Check lez-bridge compiles
+        run: cargo check --features lez-bridge
+
+  # --------------------------------------------------------------------------
+  # Integration tests against a real LEZ sequencer
+  # --------------------------------------------------------------------------
+  integration:
+    name: Integration tests (local chain)
+    runs-on: ubuntu-latest
+    needs: rust-unit
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libclang-dev clang cmake ninja-build
+
+      - name: Start LEZ chain (docker-compose)
+        working-directory: lez-build
+        run: |
+          docker compose up -d
+          # wait for sequencer to be healthy
+          timeout 120 bash -c 'until curl -sf http://127.0.0.1:3040/health; do sleep 3; done'
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            lez-wallet-module/lez-wallet-core/target
+          key: rust-integration-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
+
+      - name: Run integration tests
+        working-directory: lez-wallet-module/lez-wallet-core
+        env:
+          RISC0_DEV_MODE: "1"
+        run: |
+          cargo test --features lez-bridge --test integration_test -- --include-ignored
+
+      - name: Stop chain
+        if: always()
+        working-directory: lez-build
+        run: docker compose down
