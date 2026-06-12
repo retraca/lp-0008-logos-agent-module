@@ -1,0 +1,20 @@
+[package]
+name = "lez-agent-cli"
+version = "0.1.0"
+edition = "2021"
+description = "CLI for LP-0008 lez-wallet-core: creates agent wallets, manages shielded LEZ accounts, deploys programs"
+license = "MIT OR Apache-2.0"
+
+[[bin]]
+name = "lez"
+path = "src/main.rs"
+
+[features]
+default = []
+lez-bridge = ["lez-wallet-core/lez-bridge"]
+
+[dependencies]
+lez-wallet-core = { path = "../lez-wallet-core" }
+clap = { version = "4", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }

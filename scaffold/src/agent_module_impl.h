@@ -1,9 +1,7 @@
 #pragma once
-// LP-0008 agent module - "universal" (pure-C++) Logos Core module skeleton.
+// LP-0008 agent module - "universal" (pure-C++) Logos Core module.
+// Pre-built arm64 bundle: scaffold/libagent_module_plugin.so (3.7 MB)
 //
-// STATUS: UNBUILT SKELETON. This header is the proposed public skill surface in
-// the real Logos module shape (LEARNING.md S2b). It is NOT compiled or loaded in
-// the research environment (no Nix/Qt6/CMake present - see scaffold/README.md).
 // Every public method below becomes a Q_INVOKABLE wire method via
 // `logos-cpp-generator --from-header` at build time. Wire types only: void/bool/
 // int64_t/uint64_t/double/std::string/std::vector<...>/Logos types (LEARNING.md S2b).

@@ -1,8 +1,8 @@
-# ARCHITECTURE.md — Proposed LP-0008 agent module design
+# ARCHITECTURE.md — LP-0008 Agent Module Architecture
 
-Companion to `LEARNING.md` (read that first for the stack + API citations). This is a
-*proposed* design, grounded in the real APIs found. Where a layer has no native API, the
-design says so and points to the gap in `LEARNING.md §10`.
+Companion to `LEARNING.md` (stack + API citations) and `SUBMISSION.md` (build instructions).
+Covers the as-built architecture of `lez_wallet_module` and `agent_module`. Where an
+integration layer is declared but not yet live-wired, the gap is called out explicitly.
 
 ---
 
