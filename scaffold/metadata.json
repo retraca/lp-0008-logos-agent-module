@@ -16,13 +16,31 @@
     "storage_module"
   ],
   "interface_dependencies": [
-    { "name": "lez_wallet", "file": "interfaces/lez_wallet.h", "impl_class": "ILezWallet" },
-    { "name": "skill", "file": "interfaces/skill.h", "impl_class": "ISkill" }
+    {
+      "name": "lez_wallet",
+      "file": "interfaces/lez_wallet.h",
+      "impl_class": "ILezWallet"
+    },
+    {
+      "name": "skill",
+      "file": "interfaces/skill.h",
+      "impl_class": "ISkill"
+    }
   ],
-  "include": [],
+  "include": [
+    "interfaces"
+  ],
   "capabilities": [],
   "nix": {
-    "packages": { "runtime": ["nlohmann_json"] },
-    "cmake": { "extra_include_dirs": ["interfaces"] }
+    "packages": {
+      "runtime": [
+        "nlohmann_json"
+      ]
+    },
+    "cmake": {
+      "extra_include_dirs": [
+        "interfaces"
+      ]
+    }
   }
 }
