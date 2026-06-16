@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Agent Owner Console — LP-0008</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; }
+    h1 { font-size: 1.2rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.75rem; }
+    .subtitle { font-size: 0.85rem; color: #666; margin-bottom: 2rem; }
+    .section { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin-bottom: 1.25rem; }
+    .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+    .stat { flex: 1; min-width: 140px; background: #f7f7f7; border-radius: 4px; padding: 0.6rem 0.75rem; }
+    .stat-label { font-size: 0.75rem; color: #777; margin-bottom: 0.2rem; }
+    .stat-value { font-size: 1rem; font-family: monospace; }
+    label { display: block; font-size: 0.82rem; color: #555; margin: 0.75rem 0 0.2rem; }
+    input, textarea, select { width: 100%; padding: 0.4rem 0.5rem; font-size: 0.85rem; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; }
+    textarea { resize: vertical; }
+    button { margin-top: 0.6rem; padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer; border: 1px solid #aaa; border-radius: 4px; background: #fff; }
+    button.primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+    button.approve { background: #1a7a3f; color: #fff; border-color: #1a7a3f; }
+    button.reject  { background: #a52a2a; color: #fff; border-color: #a52a2a; }
+    .pending-item { border: 1px solid #e0c060; border-radius: 4px; background: #fffbe6; padding: 0.65rem 0.75rem; margin-bottom: 0.6rem; }
+    .pending-item .task-meta { font-size: 0.78rem; color: #555; margin-bottom: 0.35rem; }
+    .pending-item .task-action { font-family: monospace; font-size: 0.85rem; }
+    .pending-item .btns { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+    .pending-item .btns button { margin-top: 0; }
+    .skill-item { font-size: 0.85rem; padding: 0.3rem 0; border-bottom: 1px solid #eee; font-family: monospace; }
+    .skill-item:last-child { border-bottom: none; }
+    pre { background: #f5f5f5; padding: 0.65rem; border-radius: 4px; font-size: 0.78rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    .note { font-size: 0.78rem; color: #888; margin-top: 0.4rem; }
+    .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #bbb; margin-right: 6px; vertical-align: middle; }
+    .status-dot.online { background: #2a7; }
+    .status-dot.offline { background: #c33; }
+    .error { color: #c33; font-size: 0.82rem; }
+    .ok    { color: #1a7a3f; font-size: 0.82rem; }
+  </style>
+</head>
+<body>
+
+<h1>AI Agent Owner Console</h1>
+<p class="subtitle">LP-0008 — owner interface to the agent over the Logos owner channel</p>
+
+<!-- ═══════════════════════════════════════════════════
+     HOW THE BRIDGE WORKS
+     ───────────────────────────────────────────────────
+     Logos Basecamp loads this file inside a sandboxed
+     WebView that exposes a global `window.logos` object.
+     That object provides:
+
+       window.logos.callModule(method, params) → Promise<any>
+
+     where `method` is a dot-separated path into the
+     running `agent_module`:
+
+       "meta.status"        → agent_module::meta_status()
+       "meta.skills"        → agent_module::meta_skills()
+       "meta.configure"     → agent_module::meta_configure(params)
+       "approve_pending"    → agent_module::approve_pending(params)
+       "reject_pending"     → agent_module::reject_pending(params)
+       "owner.send"         → agent_module::owner_send(params)
+
+     This bridge is only available when the mini-app is
+     loaded inside a running Basecamp build that has the
+     agent_module loaded.  When the bridge is absent
+     (local file:// open, no Basecamp), every call falls
+     through to the MOCK_MODE fallback defined below so
+     the UI is still exercisable offline.
+═════════════════════════════════════════════════════ -->
+
+<!-- ── 1. Agent Status ───────────────────────────────── -->
+<div class="section" id="section-status">
+  <h2>
+    <span class="status-dot" id="agent-dot"></span>
+    Agent Status
+    <button style="float:right;margin-top:0" onclick="refreshStatus()">Refresh</button>
+  </h2>
+  <div class="row" id="stat-grid">
+    <div class="stat"><div class="stat-label">LEZ Balance</div><div class="stat-value" id="stat-balance">—</div></div>
+    <div class="stat"><div class="stat-label">Active tasks</div><div class="stat-value" id="stat-active">—</div></div>
+    <div class="stat"><div class="stat-label">Pending approvals</div><div class="stat-value" id="stat-pending">—</div></div>
+    <div class="stat"><div class="stat-label">Period spent</div><div class="stat-value" id="stat-spent">—</div></div>
+  </div>
+  <pre id="status-raw" style="margin-top:0.75rem;display:none"></pre>
+</div>
+
+<!-- ── 2. Pending Approvals ──────────────────────────── -->
+<div class="section">
+  <h2>Pending Approvals</h2>
+  <div id="pending-list">
+    <p class="note">No pending approvals.</p>
+  </div>
+</div>
+
+<!-- ── 3. Send Message on Owner Channel ─────────────── -->
+<div class="section">
+  <h2>Send Message to Agent</h2>
+  <p class="note">Sends a message over the E2E owner channel (1:1 chat conversation).</p>
+  <label>Message</label>
+  <textarea id="msg-body" rows="3" placeholder="e.g. List your active tasks"></textarea>
+  <button class="primary" onclick="sendOwnerMessage()">Send</button>
+  <pre id="msg-out" style="display:none"></pre>
+</div>
+
+<!-- ── 4. Configuration ──────────────────────────────── -->
+<div class="section">
+  <h2>Spending Limits &amp; Config</h2>
+  <p class="note">
+    Calls <code>meta.configure(key, value)</code> on the agent.
+    Values persist in the agent's config store on the remote node.
+  </p>
+
+  <div class="row">
+    <div style="flex:1;min-width:200px">
+      <label>Per-transaction limit (LEZ)</label>
+      <input id="cfg-per-tx" type="number" placeholder="e.g. 10" />
+    </div>
+    <div style="flex:1;min-width:200px">
+      <label>Per-period limit (LEZ)</label>
+      <input id="cfg-per-period" type="number" placeholder="e.g. 100" />
+    </div>
+  </div>
+
+  <div class="row">
+    <div style="flex:1;min-width:200px">
+      <label>Period length (seconds)</label>
+      <input id="cfg-period-secs" type="number" placeholder="e.g. 86400" />
+    </div>
+    <div style="flex:1;min-width:200px">
+      <label>Owner address (64-char hex)</label>
+      <input id="cfg-owner-addr" type="text" placeholder="owner NPK / chat address" />
+    </div>
+  </div>
+
+  <button class="primary" onclick="applyConfig()">Apply config</button>
+  <pre id="cfg-out" style="display:none"></pre>
+</div>
+
+<!-- ── 5. Skills ─────────────────────────────────────── -->
+<div class="section">
+  <h2>Skills <button style="margin-left:0.5rem;margin-top:0" onclick="refreshSkills()">Load</button></h2>
+  <div id="skills-list"><p class="note">Click Load to fetch the agent's skill registry.</p></div>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════
+   Bridge shim
+   ════════════════════════════════════════════════════
+   window.logos.callModule is injected by Basecamp's
+   WebView when the mini-app is loaded inside a running
+   Basecamp build with agent_module active.
+
+   If not present (local file:// open), MOCK_MODE = true
+   and every call returns synthetic data so the UI can be
+   exercised without a live agent.
+════════════════════════════════════════════════════ */
+
+const MOCK_MODE = !(window.logos && typeof window.logos.callModule === 'function');
+
+/**
+ * callModule(method, params)
+ *
+ * Real path  → window.logos.callModule(method, params)
+ * Mock path  → returns hardcoded fixture data
+ *
+ * method values used in this app:
+ *   "meta.status"      — agent_module::meta_status()
+ *   "meta.skills"      — agent_module::meta_skills()
+ *   "meta.configure"   — agent_module::meta_configure({ key, value })
+ *   "approve_pending"  — agent_module::approve_pending({ task_id })
+ *   "reject_pending"   — agent_module::reject_pending({ task_id })
+ *   "owner.send"       — agent_module::owner_send({ message })
+ */
+async function callModule(method, params) {
+  if (!MOCK_MODE) {
+    // Real bridge — Basecamp injects window.logos
+    return window.logos.callModule(method, params || {});
+  }
+
+  // ── Mock responses (offline / local preview) ──
+  await new Promise(r => setTimeout(r, 250)); // simulate latency
+  switch (method) {
+    case 'meta.status':
+      return {
+        online: true,
+        balance: '42.500000 LEZ',
+        active_tasks: 2,
+        pending_approvals: 1,
+        period_spent: '7.200000 LEZ',
+        pending: [
+          {
+            task_id: 'task-0001',
+            action: 'wallet.send',
+            recipient: 'a3f8...c2d1',
+            amount: '15.000000 LEZ',
+            reason: 'A2A payment to translate_module for task translate-0042',
+          }
+        ]
+      };
+    case 'meta.skills':
+      return {
+        skills: [
+          { name: 'storage.upload',   description: 'Upload a file to Logos storage (CID)' },
+          { name: 'storage.download', description: 'Download a file by CID' },
+          { name: 'storage.list',     description: 'List stored CIDs with labels' },
+          { name: 'storage.share',    description: 'Send a CID + decrypt key to a recipient' },
+          { name: 'messaging.send',   description: 'Send an E2E message to a Logos address' },
+          { name: 'messaging.join',   description: 'Join a delivery topic / group' },
+          { name: 'messaging.create_group', description: 'Create a group topic and distribute keys' },
+          { name: 'wallet.balance',   description: 'Read the agent LEZ balance' },
+          { name: 'wallet.send',      description: 'Shielded LEZ transfer (threshold gate applies)' },
+          { name: 'wallet.history',   description: 'Private tx history' },
+          { name: 'program.query',    description: 'Read LEZ program state' },
+          { name: 'program.call',     description: 'Call a LEZ program instruction (gate applies)' },
+          { name: 'program.deploy',   description: 'Deploy a LEZ program binary' },
+          { name: 'agent.card',       description: 'Publish / return the A2A Agent Card' },
+          { name: 'agent.discover',   description: 'Discover peer agents on a delivery topic' },
+          { name: 'agent.task',       description: 'Dispatch a task to a peer agent (A2A)' },
+          { name: 'agent.subscribe',  description: 'Subscribe to updates on a peer task' },
+          { name: 'agent.cancel',     description: 'Cancel a dispatched peer task' },
+          { name: 'meta.status',      description: 'Return agent status (this call)' },
+          { name: 'meta.configure',   description: 'Update persisted config (thresholds, owner)' },
+        ]
+      };
+    case 'meta.configure':
+      return { ok: true, key: params.key, value: params.value };
+    case 'approve_pending':
+      return { ok: true, task_id: params.task_id, executed: true };
+    case 'reject_pending':
+      return { ok: true, task_id: params.task_id, cancelled: true };
+    case 'owner.send':
+      return { ok: true, delivered: true };
+    default:
+      return { error: 'unknown method: ' + method };
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   Status
+════════════════════════════════════════════════════ */
+async function refreshStatus() {
+  const raw = document.getElementById('status-raw');
+  raw.style.display = 'none';
+  try {
+    // Calls agent_module::meta_status()
+    // Returns: { online, balance, active_tasks, pending_approvals, period_spent, pending[] }
+    const s = await callModule('meta.status');
+    document.getElementById('agent-dot').className = 'status-dot ' + (s.online ? 'online' : 'offline');
+    document.getElementById('stat-balance').textContent  = s.balance        ?? '—';
+    document.getElementById('stat-active').textContent   = s.active_tasks   ?? '—';
+    document.getElementById('stat-pending').textContent  = s.pending_approvals ?? '—';
+    document.getElementById('stat-spent').textContent    = s.period_spent   ?? '—';
+
+    raw.textContent = JSON.stringify(s, null, 2);
+    raw.style.display = 'block';
+
+    renderPending(s.pending || []);
+  } catch (e) {
+    showError('status-raw', 'meta.status failed: ' + e.message);
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   Pending approvals
+════════════════════════════════════════════════════ */
+function renderPending(items) {
+  const el = document.getElementById('pending-list');
+  if (!items.length) {
+    el.innerHTML = '<p class="note">No pending approvals.</p>';
+    return;
+  }
+  el.innerHTML = '';
+  for (const p of items) {
+    // Build via DOM APIs + textContent (never string-interpolate untrusted
+    // values into HTML/JS contexts) to avoid XSS from a malicious task_id etc.
+    const div = document.createElement('div');
+    div.className = 'pending-item';
+
+    const meta = document.createElement('div');
+    meta.className = 'task-meta';
+    meta.append('Task ID: ');
+    const code = document.createElement('code');
+    code.textContent = p.task_id ?? '';
+    meta.append(code);
+
+    const action = document.createElement('div');
+    action.className = 'task-action';
+    const actStrong = document.createElement('strong');
+    actStrong.textContent = p.action ?? '';
+    const recCode = document.createElement('code');
+    recCode.textContent = p.recipient ?? '';
+    const amtStrong = document.createElement('strong');
+    amtStrong.textContent = p.amount ?? '';
+    action.append(actStrong, ' — to ', recCode, ' — ', amtStrong);
+
+    const reason = document.createElement('div');
+    reason.className = 'task-meta';
+    reason.style.marginTop = '0.3rem';
+    reason.textContent = 'Reason: ' + (p.reason ?? '');
+
+    const out = document.createElement('pre');
+    out.style.display = 'none';
+
+    const btns = document.createElement('div');
+    btns.className = 'btns';
+    const approveBtn = document.createElement('button');
+    approveBtn.className = 'approve';
+    approveBtn.textContent = 'Approve';
+    approveBtn.addEventListener('click', () => approve(p.task_id, out));
+    const rejectBtn = document.createElement('button');
+    rejectBtn.className = 'reject';
+    rejectBtn.textContent = 'Reject';
+    rejectBtn.addEventListener('click', () => reject_(p.task_id, out));
+    btns.append(approveBtn, rejectBtn);
+
+    div.append(meta, action, reason, btns, out);
+    el.appendChild(div);
+  }
+}
+
+async function approve(task_id, out) {
+  try {
+    // Calls agent_module::approve_pending({ task_id })
+    // Agent executes the held tx and returns { ok, task_id, executed }
+    const r = await callModule('approve_pending', { task_id });
+    out.textContent = JSON.stringify(r, null, 2);
+    out.style.display = 'block';
+    if (r.ok) setTimeout(refreshStatus, 600);
+  } catch (e) {
+    out.textContent = 'approve_pending failed: ' + e.message;
+    out.style.display = 'block';
+  }
+}
+
+async function reject_(task_id, out) {
+  try {
+    // Calls agent_module::reject_pending({ task_id })
+    // Agent cancels the held tx and marks the A2A task failed.
+    // Returns { ok, task_id, cancelled }
+    const r = await callModule('reject_pending', { task_id });
+    out.textContent = JSON.stringify(r, null, 2);
+    out.style.display = 'block';
+    if (r.ok) setTimeout(refreshStatus, 600);
+  } catch (e) {
+    out.textContent = 'reject_pending failed: ' + e.message;
+    out.style.display = 'block';
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   Owner-channel message
+════════════════════════════════════════════════════ */
+async function sendOwnerMessage() {
+  const body = document.getElementById('msg-body').value.trim();
+  const out  = document.getElementById('msg-out');
+  out.style.display = 'none';
+  if (!body) { out.textContent = 'Error: message is empty.'; out.style.display = 'block'; return; }
+  try {
+    // Calls agent_module::owner_send({ message })
+    // Agent sends the text on the E2E owner 1:1 channel (chat_module::sendMessage).
+    // Returns { ok, delivered }
+    const r = await callModule('owner.send', { message: body });
+    out.textContent = r.ok ? '✓ Sent' : JSON.stringify(r, null, 2);
+    out.style.display = 'block';
+  } catch (e) {
+    showError('msg-out', 'owner.send failed: ' + e.message);
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   Config
+════════════════════════════════════════════════════ */
+async function applyConfig() {
+  const out = document.getElementById('cfg-out');
+  out.style.display = 'none';
+
+  const pairs = [
+    { key: 'per_tx_limit',     id: 'cfg-per-tx' },
+    { key: 'per_period_limit', id: 'cfg-per-period' },
+    { key: 'period_seconds',   id: 'cfg-period-secs' },
+    { key: 'owner_address',    id: 'cfg-owner-addr' },
+  ].filter(p => document.getElementById(p.id).value.trim() !== '');
+
+  if (!pairs.length) {
+    out.textContent = 'Error: fill in at least one field.';
+    out.style.display = 'block';
+    return;
+  }
+
+  const results = [];
+  for (const p of pairs) {
+    const val = document.getElementById(p.id).value.trim();
+    try {
+      // Calls agent_module::meta_configure({ key, value }) for each changed field.
+      // Agent persists to its config store and applies immediately.
+      // Returns { ok, key, value }
+      const r = await callModule('meta.configure', { key: p.key, value: val });
+      results.push(r);
+    } catch (e) {
+      results.push({ error: p.key + ': ' + e.message });
+    }
+  }
+
+  out.textContent = JSON.stringify(results, null, 2);
+  out.style.display = 'block';
+}
+
+/* ════════════════════════════════════════════════════
+   Skills
+════════════════════════════════════════════════════ */
+async function refreshSkills() {
+  const el = document.getElementById('skills-list');
+  try {
+    // Calls agent_module::meta_skills()
+    // Returns { skills: [{ name, description }] }
+    const r = await callModule('meta.skills');
+    if (!r.skills || !r.skills.length) {
+      el.innerHTML = '<p class="note">No skills returned.</p>';
+      return;
+    }
+    el.innerHTML = r.skills.map(s =>
+      `<div class="skill-item"><strong>${esc(s.name)}</strong> — ${esc(s.description)}</div>`
+    ).join('');
+  } catch (e) {
+    el.innerHTML = '<p class="error">meta.skills failed: ' + esc(e.message) + '</p>';
+  }
+}
+
+/* ════════════════════════════════════════════════════
+   Helpers
+════════════════════════════════════════════════════ */
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showError(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+if (MOCK_MODE) {
+  const note = document.createElement('p');
+  note.style.cssText = 'font-size:0.78rem;color:#a06000;background:#fff8e1;border:1px solid #e0c060;border-radius:4px;padding:0.5rem 0.75rem;';
+  note.textContent = 'MOCK MODE — window.logos bridge not found. Showing fixture data. Load this app inside a running Basecamp build with agent_module active for live calls.';
+  document.body.insertBefore(note, document.body.firstChild);
+}
+
+// Auto-load status on open
+refreshStatus();
+</script>
+</body>
+</html>

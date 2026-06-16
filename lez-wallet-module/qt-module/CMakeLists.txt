@@ -4,6 +4,10 @@ project(lez_wallet_module VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Required for Q_OBJECT / Q_PLUGIN_METADATA in generated glue header
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 # --- Logos SDK (set by `nix develop` via LOGOS_CPP_SDK_ROOT) ---
 if(NOT LOGOS_CPP_SDK_ROOT AND DEFINED ENV{LOGOS_CPP_SDK_ROOT})
     set(LOGOS_CPP_SDK_ROOT "$ENV{LOGOS_CPP_SDK_ROOT}")
@@ -63,7 +67,6 @@ if(LOGOS_CPP_GENERATOR)
         OUTPUT
             "${GENERATED_DIR}/lez_wallet_module_qt_glue.h"
             "${GENERATED_DIR}/lez_wallet_module_dispatch.cpp"
-            "${GENERATED_DIR}/lez_wallet_module_events.cpp"
         COMMAND ${LOGOS_CPP_GENERATOR}
             --from-header "${CMAKE_CURRENT_SOURCE_DIR}/src/lez_wallet_module_impl.h"
             --impl-class LezWalletModuleImpl
@@ -89,11 +92,15 @@ if(LOGOS_CPP_GENERATOR)
         COMMENT "Running logos-cpp-generator (sdk pass) for lez_wallet_module"
     )
 
+    # Copy metadata.json next to the generated qt_glue.h so moc can resolve FILE "metadata.json"
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/metadata.json" "${GENERATED_DIR}/metadata.json" COPYONLY)
+
     set(GENERATED_SOURCES
+        "${GENERATED_DIR}/lez_wallet_module_qt_glue.h"
         "${GENERATED_DIR}/lez_wallet_module_dispatch.cpp"
-        "${GENERATED_DIR}/lez_wallet_module_events.cpp"
         "${SDK_GENERATED_DIR}/logos_sdk.cpp"
     )
+    set_source_files_properties("${GENERATED_DIR}/lez_wallet_module_qt_glue.h" PROPERTIES GENERATED TRUE)
     set(GENERATED_INCLUDE_DIRS "${GENERATED_DIR}" "${SDK_GENERATED_DIR}")
 else()
     message(WARNING "logos-cpp-generator not found. Run inside `nix develop`.")
@@ -119,6 +126,15 @@ if(LOGOS_CPP_SDK_ROOT)
         "${LOGOS_CPP_SDK_ROOT}/include"
         "${LOGOS_CPP_SDK_ROOT}/include/core"
         "${LOGOS_CPP_SDK_ROOT}/include/cpp"
+    )
+endif()
+
+# Logos SDK source headers (logos_module_context.h, logos_result.h, logos_types.h, etc.)
+# These live in the source derivation, not the headers derivation.
+if(LOGOS_CPP_SDK_SRC)
+    target_include_directories(lez_wallet_module_plugin PRIVATE
+        "${LOGOS_CPP_SDK_SRC}/cpp"
+        "${LOGOS_CPP_SDK_SRC}/core"
     )
 endif()
 

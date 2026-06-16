@@ -1,7 +1,9 @@
 #pragma once
-// LP-0008 agent module - "universal" (pure-C++) Logos Core module.
-// Pre-built arm64 bundle: scaffold/libagent_module_plugin.so (3.7 MB)
+// LP-0008 agent module - "universal" (pure-C++) Logos Core module skeleton.
 //
+// STATUS: UNBUILT SKELETON. This header is the proposed public skill surface in
+// the real Logos module shape (LEARNING.md S2b). It is NOT compiled or loaded in
+// the research environment (no Nix/Qt6/CMake present - see scaffold/README.md).
 // Every public method below becomes a Q_INVOKABLE wire method via
 // `logos-cpp-generator --from-header` at build time. Wire types only: void/bool/
 // int64_t/uint64_t/double/std::string/std::vector<...>/Logos types (LEARNING.md S2b).
@@ -37,18 +39,17 @@ public:
 
     // ===== Blockchain skills (-> bound lez_wallet; spending-threshold gate here) =====
     std::string wallet_balance();
-    std::string wallet_send(const std::string& recipient, const std::string& amount);     // gated
+    std::string wallet_send(const std::string& recipient, const std::string& amount);
+    std::string wallet_send_to(const std::string& npk, const std::string& vpk, const std::string& amount);
     std::string wallet_history();
     std::string program_query(const std::string& program_id, const std::string& params);
-    std::string program_call(const std::string& program_id,
-                             const std::string& instruction, const std::string& params);   // gated
-    std::string program_deploy(const std::string& binary_path);                            // may be gated
+    std::string program_call(const std::string& program_id, const std::string& instruction, const std::string& params);
+    std::string program_deploy(const std::string& binary_path);
 
     // ===== Agent coordination (A2A over Logos Messaging) =====
     std::string agent_card();
     std::string agent_discover(const std::string& topic);
-    std::string agent_task(const std::string& agent_address,
-                           const std::string& skill, const std::string& params);            // pays LEZ price
+    std::string agent_task(const std::string& agent_address, const std::string& skill, const std::string& params);
     std::string agent_subscribe(const std::string& agent_address, const std::string& task_id);
     std::string agent_cancel(const std::string& agent_address, const std::string& task_id);
 

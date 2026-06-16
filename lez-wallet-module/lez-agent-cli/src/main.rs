@@ -1,219 +1,279 @@
-//! LP-0008 agent CLI.
-//!
-//! Build with the default feature set (no chain needed) for local keystore operations:
-//!   cargo build --release
-//!
-//! Build with lez-bridge (requires the full lez-build workspace) for live chain operations:
-//!   cargo build --release --features lez-bridge
-//!
-//! All outputs are JSON for easy shell pipeline consumption:
-//!   {"ok": "<value>"}     — success
-//!   {"error": "<msg>"}    — failure
+use std::ffi::{CStr, CString};
+use std::os::raw::c_char;
+use std::process;
 
+use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+
+// ---------------------------------------------------------------------------
+// FFI declarations -- symbols exported by the linked lez-wallet-core cdylib.
+// ---------------------------------------------------------------------------
+
+extern "C" {
+    fn lez_wallet_ensure_account(home_dir: *const c_char, passphrase: *const c_char) -> *mut c_char;
+    fn lez_wallet_npk(home_dir: *const c_char, passphrase: *const c_char) -> *mut c_char;
+    fn lez_wallet_balance(home_dir: *const c_char, passphrase: *const c_char) -> *mut c_char;
+    fn lez_wallet_history(home_dir: *const c_char, passphrase: *const c_char, limit: i64) -> *mut c_char;
+    fn lez_wallet_sync_private(home_dir: *const c_char) -> bool;
+    fn lez_wallet_send(
+        home_dir: *const c_char,
+        passphrase: *const c_char,
+        recipient: *const c_char,
+        amount_decimal: *const c_char,
+    ) -> *mut c_char;
+    fn lez_wallet_program_query(
+        home_dir: *const c_char,
+        program_id: *const c_char,
+        params_json: *const c_char,
+    ) -> *mut c_char;
+    fn lez_wallet_program_call(
+        home_dir: *const c_char,
+        passphrase: *const c_char,
+        program_id: *const c_char,
+        instruction: *const c_char,
+        params_json: *const c_char,
+    ) -> *mut c_char;
+    fn lez_wallet_program_deploy(
+        home_dir: *const c_char,
+        passphrase: *const c_char,
+        binary_path: *const c_char,
+    ) -> *mut c_char;
+    fn lez_wallet_free_string(s: *mut c_char);
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+fn cs(s: &str) -> CString {
+    CString::new(s).expect("argument contains interior nul byte")
+}
+
+// Takes ownership of the returned pointer, copies to String, frees it.
+unsafe fn take(ptr: *mut c_char) -> String {
+    let s = CStr::from_ptr(ptr).to_string_lossy().into_owned();
+    lez_wallet_free_string(ptr);
+    s
+}
+
+// Prints the JSON result and exits 1 if it is an error envelope.
+fn emit(json: &str) {
+    println!("{json}");
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(json) {
+        if v.get("error").is_some() {
+            process::exit(1);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI definitions
+// ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "lez", about = "LP-0008 agent wallet CLI")]
+#[command(name = "lez", about = "LEZ agent wallet CLI")]
 struct Cli {
-    /// Sequencer URL (overrides wallet_config.json in --home)
-    #[arg(long, global = true)]
-    sequencer: Option<String>,
-
     #[command(subcommand)]
-    cmd: Cmd,
+    command: Cmd,
 }
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Create or reopen a shielded LEZ account; returns account ID as JSON.
     EnsureAccount {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
     },
-    /// Return the agent's NullifierPublicKey (64-char hex).
     Npk {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
     },
-    /// Return the agent's current shielded token balance.
     Balance {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
     },
-    /// Sync private chain state (scans for incoming shielded transfers).
+    Send {
+        #[arg(long)]
+        home: String,
+        #[arg(long)]
+        passphrase: String,
+        #[arg(long)]
+        to: String,
+        #[arg(long)]
+        amount: String,
+    },
     Sync {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
     },
-    /// Return recent transaction history.
     History {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
         #[arg(long, default_value = "20")]
         limit: i64,
     },
-    /// Send a shielded transfer.
-    Send {
-        #[arg(long)]
-        home: PathBuf,
-        #[arg(long)]
-        passphrase: String,
-        #[arg(long)]
-        recipient: String,
-        #[arg(long)]
-        amount: String,
-    },
-    /// LEZ program operations.
     #[command(subcommand)]
     Program(ProgramCmd),
 }
 
 #[derive(Subcommand)]
 enum ProgramCmd {
-    /// Deploy a compiled LEZ program binary; returns program ID as JSON.
     Deploy {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
         #[arg(long)]
-        binary: PathBuf,
+        binary: String,
     },
-    /// Call a LEZ program instruction.
     Call {
         #[arg(long)]
-        home: PathBuf,
+        home: String,
         #[arg(long)]
         passphrase: String,
-        #[arg(long)]
+        #[arg(long = "program-id")]
         program_id: String,
         #[arg(long)]
         instruction: String,
-        #[arg(long, default_value = "{}")]
+        #[arg(long)]
         params: String,
     },
-    /// Query a LEZ program's state (read-only, no signature needed).
     Query {
         #[arg(long)]
+        home: String,
+        #[arg(long = "program-id")]
         program_id: String,
-        #[arg(long, default_value = "{}")]
+        #[arg(long)]
         params: String,
     },
 }
 
-#[cfg(feature = "lez-bridge")]
-fn ok(v: &str) -> String {
-    format!("{{\"ok\": {}}}", serde_json::to_string(v).unwrap())
-}
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
 
-#[cfg(feature = "lez-bridge")]
-fn err_json(msg: &str) -> String {
-    format!("{{\"error\": {}}}", serde_json::to_string(msg).unwrap())
-}
-
-#[cfg(feature = "lez-bridge")]
-#[tokio::main]
-async fn main() {
-    use lez_wallet_core::provider;
-
+fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // If --sequencer is set, write wallet_config.json into the home dir before any operation.
-    let write_sequencer_config = |home: &PathBuf, seq: &Option<String>| {
-        if let Some(ref url) = seq {
-            let cfg_path = home.join("wallet_config.json");
-            let cfg = serde_json::json!({ "sequencer_addr": url });
-            let _ = std::fs::create_dir_all(home);
-            let _ = std::fs::write(&cfg_path, cfg.to_string());
-        }
-    };
-
-    let result = match &cli.cmd {
+    match cli.command {
         Cmd::EnsureAccount { home, passphrase } => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::ensure_account(home, passphrase).await {
-                Ok(id) => ok(&id),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe { take(lez_wallet_ensure_account(cs(&home).as_ptr(), cs(&passphrase).as_ptr())) };
+            // ensure_account returns a bare AccountId string on success, not a JSON envelope.
+            // Wrap it so callers always get uniform JSON.
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
         }
+
         Cmd::Npk { home, passphrase } => {
-            match provider::get_npk(home, passphrase).await {
-                Ok(npk) => ok(&npk),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe { take(lez_wallet_npk(cs(&home).as_ptr(), cs(&passphrase).as_ptr())) };
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
         }
+
         Cmd::Balance { home, passphrase } => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::get_balance(home, passphrase).await {
-                Ok(bal) => ok(&bal),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe { take(lez_wallet_balance(cs(&home).as_ptr(), cs(&passphrase).as_ptr())) };
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
         }
+
+        Cmd::Send { home, passphrase, to, amount } => {
+            let result = unsafe {
+                take(lez_wallet_send(
+                    cs(&home).as_ptr(),
+                    cs(&passphrase).as_ptr(),
+                    cs(&to).as_ptr(),
+                    cs(&amount).as_ptr(),
+                ))
+            };
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
+        }
+
         Cmd::Sync { home } => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::sync_private(home).await {
-                Ok(_) => ok("synced"),
-                Err(e) => err_json(&e.to_string()),
+            let ok = unsafe { lez_wallet_sync_private(cs(&home).as_ptr()) };
+            if ok {
+                println!(r#"{{"ok": true}}"#);
+            } else {
+                println!(r#"{{"error": "sync failed"}}"#);
+                process::exit(1);
             }
         }
+
         Cmd::History { home, passphrase, limit } => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::get_history(home, passphrase, *limit).await {
-                Ok(hist) => ok(&hist),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe {
+                take(lez_wallet_history(cs(&home).as_ptr(), cs(&passphrase).as_ptr(), limit))
+            };
+            emit(&result);
         }
-        Cmd::Send { home, passphrase, recipient, amount } => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::send_shielded(home, passphrase, recipient, amount).await {
-                Ok(tx) => ok(&tx),
-                Err(e) => err_json(&e.to_string()),
-            }
-        }
+
         Cmd::Program(ProgramCmd::Deploy { home, passphrase, binary }) => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::program_deploy(home, passphrase, binary).await {
-                Ok(id) => ok(&id),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe {
+                take(lez_wallet_program_deploy(
+                    cs(&home).as_ptr(),
+                    cs(&passphrase).as_ptr(),
+                    cs(&binary).as_ptr(),
+                ))
+            };
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
         }
+
         Cmd::Program(ProgramCmd::Call { home, passphrase, program_id, instruction, params }) => {
-            write_sequencer_config(home, &cli.sequencer);
-            match provider::program_call(home, passphrase, program_id, instruction, params).await {
-                Ok(res) => ok(&res),
-                Err(e) => err_json(&e.to_string()),
-            }
+            let result = unsafe {
+                take(lez_wallet_program_call(
+                    cs(&home).as_ptr(),
+                    cs(&passphrase).as_ptr(),
+                    cs(&program_id).as_ptr(),
+                    cs(&instruction).as_ptr(),
+                    cs(&params).as_ptr(),
+                ))
+            };
+            let json = if result.starts_with('{') {
+                result
+            } else {
+                format!(r#"{{"ok": "{result}"}}"#)
+            };
+            emit(&json);
         }
-        Cmd::Program(ProgramCmd::Query { program_id, params }) => {
-            let home = PathBuf::from(".");
-            write_sequencer_config(&home, &cli.sequencer);
-            match provider::program_query(&home, program_id, params).await {
-                Ok(res) => ok(&res),
-                Err(e) => err_json(&e.to_string()),
-            }
+
+        Cmd::Program(ProgramCmd::Query { home, program_id, params }) => {
+            let result = unsafe {
+                take(lez_wallet_program_query(
+                    cs(&home).as_ptr(),
+                    cs(&program_id).as_ptr(),
+                    cs(&params).as_ptr(),
+                ))
+            };
+            emit(&result);
         }
-    };
+    }
 
-    println!("{result}");
-}
-
-// Without lez-bridge, the CLI still parses args so the binary compiles cleanly,
-// but returns an informative error rather than silently doing nothing.
-#[cfg(not(feature = "lez-bridge"))]
-#[tokio::main]
-async fn main() {
-    let _cli = Cli::parse();
-    eprintln!("This binary was built without --features lez-bridge.");
-    eprintln!("Rebuild with: cargo build --release --features lez-bridge");
-    eprintln!("(requires the full lez-build workspace; see docs/DEPLOYMENT.md §4)");
-    std::process::exit(1);
+    Ok(())
 }

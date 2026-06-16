@@ -1,122 +1,142 @@
-# Logos Agent Module — LP-0008
+# LP-0008 — Autonomous AI Agent Module for Logos Core
 
-Autonomous AI agent module for Logos Core. Lambda Prize LP-0008 submission.
+A Logos Core module that gives an AI agent its own shielded LEZ wallet, Logos Storage, and
+Logos Messaging address. The agent runs headless on any remote node, is reachable from any
+Logos Basecamp instance via end-to-end encrypted chat, and coordinates with peer agents over
+the A2A protocol — with Logos Messaging as the transport and LEZ micropayments filling the gap
+A2A deliberately leaves open. The owner deploys with a single CLI command; no server
+configuration, no exposed APIs, no custodian.
 
-## What this is
+---
 
-Two Logos Core universal modules that together form a fully autonomous AI agent with a shielded LEZ wallet identity.
+## Architecture
 
-### `lez_wallet_module`
+```
+        Owner's laptop (Logos Basecamp)
++-----------------------------------------------+
+|  owner_chat_ui (ui_qml)                       |
+|   one-command deploy CLI                      |
++-----------------------------------------------+
+          |  Logos Messaging (E2E, owner channel)
+          v
+  Remote node (logoscore -D, headless)
++-----------------------------------------------+
+|  agent_module  [core, universal C++]          |
+|   runtime loop / skill dispatcher             |
+|   owner channel handler + spend-threshold     |
+|   A2A binding (cards, task lifecycle)         |
+|   pluggable inference adapter                 |
+|        |         |          |         |       |
+|        v         v          v         v       |
+|  chat_module  delivery  storage  lez_wallet   |
+|               _module   _module   _module     |
++-----------------------------------------------+
+          |
+          v  sequencer RPC + Risc0 proofs
+   LEZ sequencer (testnet / standalone)
+```
 
-A new Logos Core Qt universal module exposing the LEZ shielded wallet to any other module via `LogosAPI`. Previously, no module existed for this. The Rust core (`lez-wallet-core`) wraps `nssa`, `bedrock_client`, and `wallet` behind a C FFI.
+Skills are discrete, composable units loaded at runtime without recompiling the core module.
+See [docs/SKILL_INTERFACE.md](docs/SKILL_INTERFACE.md) for the third-party skill contract.
 
-Wire methods: `ensure_account`, `npk`, `balance`, `history`, `sync_private`, `send`, `program_query`, `program_call`, `program_deploy`.
+---
 
-Pre-built arm64 bundle: `lez-wallet-module/qt-module/liblez_wallet_module_plugin.so` (33 MB).
-
-### `agent_module`
-
-Autonomous skill dispatcher with spending-threshold gate, owner channel (E2E via `chat_module`), A2A task coordination, and pluggable inference adapter. Implements all 15 default skills across Storage, Messaging, Wallet/Blockchain, A2A, and Meta categories.
-
-Pre-built arm64 bundle: `scaffold/libagent_module_plugin.so` (3.7 MB).
-
-## Quick start
+## Quick-start deploy
 
 ```bash
-# Load both modules into Logos Core headless
-logoscore -D \
-  -m lez-wallet-module/qt-module/liblez_wallet_module_plugin.so \
-  -m scaffold/libagent_module_plugin.so
+# 1. Install Nix with flakes (one-time, any machine)
+curl --proto '=https' --tlsv1.2 -sSf https://install.determinate.systems/nix | sh
+nix run nixpkgs#nixFlakes -- --version   # verify
 
-# Create the agent's shielded LEZ account
-logoscore -c 'lez_wallet_module.ensure_account("mypassphrase")'
+# 2. Build the module
+nix build .#lib
+# produces ./result/lib/agent_module_plugin.so + metadata.json
 
-# Configure the agent
-logoscore -c 'agent_module.meta_configure("per_tx_limit", "10.0")'
-logoscore -c 'agent_module.meta_configure("per_period_limit", "100.0")'
-logoscore -c 'agent_module.meta_configure("owner_address", "<your-npk>")'
+# 3. Deploy to a remote node (headless logoscore)
+logos-agent deploy \
+  --node ssh://user@your-node \
+  --owner-key ~/.logos/keys/owner.key \
+  --spend-threshold 1.0              \   # LEZ; above this requires owner approval
+  --module ./result/lib/agent_module_plugin.so
 
-# Check balance
-logoscore -c 'lez_wallet_module.balance("mypassphrase")'
-
-# List skills
-logoscore -c 'agent_module.meta_skills()'
-
-# Get A2A agent card
-logoscore -c 'agent_module.agent_card()'
+# 4. Interact from Basecamp (any laptop with your keys)
+logos-agent chat   # opens owner channel; type `meta.skills()` to list capabilities
 ```
 
-## Run the demo
+> Prerequisites: Nix (>=2.18) with flakes enabled. The build pulls Qt6, CMake, and all
+> Logos SDK dependencies from the locked flake inputs — no manual toolchain installation.
+
+---
+
+## Documentation
+
+| Document | What it covers |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Component overview, runtime, event loop, reliability design |
+| [docs/SKILL_INTERFACE.md](docs/SKILL_INTERFACE.md) | Third-party skill contract, registration, step-by-step tutorial |
+| [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | What the agent can/cannot do without owner approval; key model; threat surface |
+| [docs/A2A_BINDING.md](docs/A2A_BINDING.md) | A2A transport binding over Logos Messaging; Agent Card schema; task lifecycle |
+| [BUILD_PLAN.md](BUILD_PLAN.md) | Phase-by-phase build roadmap; toolchain setup; gap analysis |
+| [LEARNING.md](LEARNING.md) | Grounded API citations from the real Logos repos |
+
+---
+
+## Running the end-to-end demo
 
 ```bash
-# Against local LEZ chain (docker-compose up in lez-build/)
-./demo.sh
+# Start a standalone LEZ sequencer (RISC0_DEV_MODE=0 for real proofs)
+export RISC0_DEV_MODE=0
+# ... follow sequencer setup in BUILD_PLAN.md Phase 0 ...
 
-# Against testnet
-SEQUENCER=https://testnet.lez.logos.co ./demo.sh
+# Then run the reproducible e2e demo
+bash tests/e2e.sh
 ```
 
-The demo creates two agent wallets, fetches NPKs, checks balances, deploys a LEZ program, calls it, and queries state.
+`tests/e2e.sh` deploys three agents (Storage, Messaging, Blockchain skill categories), runs
+an A2A task-lifecycle exchange between two of them, verifies LEZ payment, and reports pass/fail.
+See [tests/README.md](tests/README.md) for what each step asserts and how to read the output.
 
-## Structure
+Video demo: `docs/lp0008-demo.cast` (asciinema recording) — play with `asciinema play docs/lp0008-demo.cast`.
+A full `.mp4` render is linked in the submission write-up (not committed; see [docs/REPO_MANIFEST.md](docs/REPO_MANIFEST.md)).
 
-```
-lez-wallet-module/
-  lez-wallet-core/           Rust crate — NSK keystore, key derivation, WalletCore bridge
-    src/provider.rs          All async wallet + program operations
-    src/ffi.rs               C FFI exports for Qt module
-    tests/integration_test.rs  Integration tests (require local chain)
-  qt-module/
-    src/lez_wallet_module_impl.{h,cpp}  Qt universal module implementation
-    metadata.json            Module manifest
-    liblez_wallet_module_plugin.so  Pre-built arm64 bundle
+---
 
-scaffold/                    agent_module
-  src/
-    agent_module_impl.h      Full skill surface + spending gate + A2A + owner channel
-    agent_module_impl.cpp    1492-line implementation
-  interfaces/
-    lez_wallet.h             ILezWallet interface contract
-    skill.h                  ISkill interface contract
-    chat_module_api.h/cpp    Platform stub
-    delivery_module_api.h/cpp  Platform stub
-    storage_module_api.h/cpp   Platform stub
-  metadata.json              Module manifest (module.json)
-  libagent_module_plugin.so  Pre-built arm64 bundle
+## Default skills
 
-lez-build/                   Embedded lez-build workspace (stubs for CI; full tree needed for lez-bridge)
-docs/
-  DEPLOYMENT.md              Step-by-step deployment guide
-ARCHITECTURE.md              Module architecture, skill interface, A2A binding, security model
-SUBMISSION.md                Full build instructions and known limitations
-LEARNING.md                  Logos stack API research notes (cited by ARCHITECTURE.md)
-demo.sh                      End-to-end demo script
-```
+| Category | Skills |
+|---|---|
+| Storage | `storage.upload` `storage.download` `storage.list` `storage.share` |
+| Messaging | `messaging.send` `messaging.join` `messaging.create_group` |
+| Wallet | `wallet.balance` `wallet.send` `wallet.history` |
+| Programs | `program.query` `program.call` `program.deploy` |
+| A2A coordination | `agent.card` `agent.discover` `agent.task` `agent.subscribe` `agent.cancel` |
+| Meta | `meta.skills` `meta.status` `meta.configure` |
 
-## Security model
+---
 
-The agent's NSK lives only on the node where `logoscore` runs, encrypted at rest with AES-256-GCM under an Argon2id key derived from the owner passphrase. The owner's laptop never holds the agent's NSK. Above-threshold transactions are never submitted without explicit owner approval over the E2E owner channel.
+## Status and known limitations
 
-## Spending threshold
+**What is complete (design and interface layer):**
+- Full skill surface defined in `scaffold/src/agent_module_impl.h` (20 prize skills)
+- Third-party skill contract `scaffold/interfaces/skill.h`
+- Proposed `lez_wallet_module` contract `scaffold/interfaces/lez_wallet.h`
+- Architecture, security model, A2A binding, and skill interface fully documented
 
-Configured via `meta_configure`. Three parameters:
+**What is pending (implementation):**
+- `scaffold/src/agent_module_impl.cpp` — the runtime implementation (requires the Nix
+  toolchain and a working `lez_wallet_module`)
+- `lez_wallet_module` itself — the shielded-wallet backend does not yet exist in Logos Core;
+  this is the central build gap (see LEARNING.md S6d and BUILD_PLAN.md Phase 1)
+- Testnet deployments of the three required agents — pending toolchain setup (BUILD_PLAN Phase 0)
+- E2E demo video with terminal output confirming `RISC0_DEV_MODE=0` — pending real testnet run
+- CI green on the default branch — `.github/workflows/ci.yml` is ready; will go green once
+  `nix build` succeeds against a working implementation
 
-| Key | Meaning |
-|-----|---------|
-| `per_tx_limit` | Maximum single-transaction amount (decimal LEZ) for autonomous action |
-| `per_period_limit` | Maximum total spend in one rolling period |
-| `period_seconds` | Rolling period duration in seconds |
+The scaffold compiles to a loadable `.so` that exports the correct Qt Remote Objects interface
+and wires the module into `logoscore`'s module registry. It is not yet functionally complete.
 
-Above-threshold calls queue a pending proposal and notify the owner via the owner channel. `approve_pending(proposal_id)` / `reject_pending(proposal_id)` resolve it.
-
-## A2A compatibility
-
-`agent.card()` returns a spec-compliant A2A Agent Card (A2A 0.2) with LEZ identity extension (`x-lez-identity.npk`) and per-skill LEZ price declarations. Logos Messaging replaces A2A's HTTP transport. On task acceptance the agent submits a shielded LEZ transfer for the declared price before starting work.
-
-## Building from source
-
-See `docs/DEPLOYMENT.md` for full build instructions. The Qt modules require the Logos SDK Nix dev shell; `lez-wallet-core` builds standalone with `cargo build --release` (default features) or with the full lez-build tree (`--features lez-bridge`).
+---
 
 ## License
 
-MIT OR Apache-2.0
+MIT. See [LICENSE](LICENSE).

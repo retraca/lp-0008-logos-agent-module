@@ -1,0 +1,13 @@
+[package]
+name = "agent-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Single-command deploy CLI for the LP-0008 autonomous AI agent module on Logos Core"
+
+[[bin]]
+name = "agent"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"

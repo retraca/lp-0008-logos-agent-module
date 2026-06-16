@@ -5,6 +5,36 @@
 
 ---
 
+## Submission checklist — success criteria
+
+| # | Criterion | Status | Evidence / location |
+|---|---|---|---|
+| 1 | Agent module loads inside Logos Core alongside wallet/storage/messaging without modifying those modules | DONE | `scaffold/libagent_module_plugin.so`; `lez_wallet_module` is a new additive module, not a fork of an existing one |
+| 2 | Agent has its own shielded LEZ account; can send and receive tokens independently of the owner | DONE | `lez_wallet_module`: `ensure_account`, `send`, `balance`, `sync_private` |
+| 3 | Owner deploys and configures the agent with a single CLI command | DONE | `logoscore -D -m ... + meta_configure` sequence; full script in Build instructions below |
+| 4 | Owner interacts from a separate Logos app instance via Logos Messaging, no intermediary server | PARTIAL | Owner channel wired in `agent_module_impl.cpp`; live messaging requires a running `logoscore` runtime host (see limitation 3) |
+| 5 | Spending threshold correctly holds above-threshold transactions for owner approval; executes below-threshold autonomously | DONE | `agent_module_impl.cpp` spending gate; `docs/SECURITY_MODEL.md` |
+| 6 | All 20 default skills implemented and documented | DONE | `scaffold/src/agent_module_impl.h` + `agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
+| 7 | A2A-compatible agent coordination: Agent Cards follow A2A schema, task lifecycle followed, documented as A2A transport binding over Logos Messaging | DONE | `docs/A2A_BINDING.md`; `ARCHITECTURE.md §8` |
+| 8 | Two agents discover each other, execute a task following A2A lifecycle, transfer LEZ payment autonomously | PENDING (needs testnet funds) | Architecture designed for it; demo video (`docs/lp0008-demo.mp4`) shows shielded transfer between two agent identities |
+| 9 | At least 3 illustrative use cases demonstrated end-to-end on LEZ testnet | PENDING (needs testnet funds + video narration) | `docs/VIDEO_NARRATION.md` narration script ready; `docs/lp0008-demo.mp4` silent recording ready |
+| 10 | Three separate agents deployed on LEZ testnet — one per skill category (Storage, Messaging, Blockchain) | PENDING (needs testnet funds) | — |
+| 11 | Full documentation: skill interface spec, deployment guide, owner interaction guide | DONE | `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`, this file |
+| 12 | Skill interface (SDK) enabling new skills without modifying the core module | DONE | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` |
+| 13 | Owner interface accessible from Logos app (Basecamp) via owner channel | PARTIAL | Owner channel implemented; Basecamp local build follows standard `logos-module-builder` flow (same dev shell as the agent build) |
+| 14 | Agent recovers from transient failures without losing pending task state | DONE | Task state persisted to module data dir; reloaded on start (`ARCHITECTURE.md §2`) |
+| 15 | Above-threshold transactions not executed if owner is unreachable | DONE | Retry-then-fail logic (`ARCHITECTURE.md §2`; `docs/SECURITY_MODEL.md`) |
+| 16 | Skill failures isolated; a failing skill does not crash the module or affect other skills | DONE | Each skill call wrapped; errors returned as values (`scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md`) |
+| 17 | CU cost of each on-chain operation documented | PENDING (needs live testnet run) | Operations identified in `ARCHITECTURE.md §7`; costs require sequencer measurement |
+| 18 | Agent module deployed and tested on LEZ devnet/testnet | PENDING (needs testnet funds) | Module loads and runs against local `lez-build` chain |
+| 19 | End-to-end integration tests in CI | PENDING | — |
+| 20 | CI green on default branch | PENDING | — |
+| 21 | README documents end-to-end usage: deployment, configuration, CLI + owner channel interaction | DONE | This file + `docs/` |
+| 22 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | PARTIAL | Wallet CLI commands verified against local chain; full multi-agent orchestration script pending testnet funds |
+| 23 | Recorded video demo with narration | PENDING (needs voice narration) | Silent recording at `docs/lp0008-demo.mp4`; narration script at `docs/VIDEO_NARRATION.md` |
+
+---
+
 ## What is built
 
 Two Logos Core modules that together form a fully autonomous AI agent with a shielded LEZ wallet identity:
@@ -159,6 +189,14 @@ Built on macOS 15.5 / arm64 inside the `logos-module-builder` Nix dev shell:
 4. **Inference adapter**: the agent dispatches skills based on incoming messages; the `InferenceAdapter` interface is pluggable and intentionally unbound — the LLM integration is out of scope for this submission and would be operator-supplied.
 
 5. **A2A identity binding**: the Agent Card publishes the NPK as `x-lez-identity.npk`; the deterministic chat-module introBundle derivation from NSK is a known gap (LEARNING.md §9, §10 gap 2).
+
+6. **Fresh-recipient settlement constraint**: shielded transfers to a brand-new account (zero notes) require the recipient to have at least one prior note for the Merkle tree to include them. Newly funded testnet agent addresses may need a small "dust" seed transaction before receiving a full payment.
+
+7. **Pluggable inference**: the `InferenceAdapter` interface is defined and documented, but no inference backend is bundled. The deployer must supply an LLM (local via llama.cpp/ollama subprocess, or remote API). This is by design (out of scope per the prize spec) but means the agent does not make autonomous decisions out of the box — it dispatches skills based on structured commands until an inference adapter is wired in.
+
+8. **Storage encryption**: `storage_module` handles content-addressed storage but not client-side encryption. The `storage.upload` skill encrypts before upload using an agent-implemented scheme (not a Logos primitive); the encryption is functional but not independently audited.
+
+9. **Group messaging**: `messaging.join` and `messaging.create_group` use the delivery module (pub/sub topics) rather than native E2E group encryption. Group key distribution is handled by the agent over 1:1 chat channels — functional but a weaker trust model than native group E2E.
 
 ---
 

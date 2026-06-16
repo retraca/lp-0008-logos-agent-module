@@ -1,20 +1,48 @@
 #pragma once
-// Stub API for the Logos Core delivery_module platform dependency.
-// The real implementation is injected by logos-core at runtime via LogosAPI.
-
 #include <QString>
+#include <QByteArray>
+#include <QVariant>
+#include <QVariantList>
 #include "logos_api.h"
+#include "logos_api_client.h"
 
 class DeliveryModule {
 public:
-    explicit DeliveryModule(LogosAPI* api) : m_api(api) {}
+    explicit DeliveryModule(LogosAPI* api)
+        : m_api(api), m_client(api->getClient("delivery_module")) {}
 
-    // Subscribe to a content topic (Waku/Status delivery layer).
-    void subscribe(const QString& topic) { (void)topic; }
+    // Subscribe to a Waku content topic.
+    bool subscribe(const QString& contentTopic) {
+        QVariant r = m_client->invokeRemoteMethod(
+            "delivery_module", "subscribe", QVariant(contentTopic));
+        return r.toBool();
+    }
 
     // Unsubscribe from a content topic.
-    void unsubscribe(const QString& topic) { (void)topic; }
+    bool unsubscribe(const QString& contentTopic) {
+        QVariant r = m_client->invokeRemoteMethod(
+            "delivery_module", "unsubscribe", QVariant(contentTopic));
+        return r.toBool();
+    }
+
+    // Publish a message to a content topic (payload as QByteArray).
+    bool send(const QString& contentTopic, const QByteArray& payload) {
+        // Pass as two-arg: content topic + payload wrapped in QVariant(QByteArray).
+        // Some versions of the RPC layer handle QByteArray natively; fall back to
+        // passing as a hex string if the call fails.
+        QVariant r = m_client->invokeRemoteMethod(
+            "delivery_module", "send",
+            QVariant(contentTopic), QVariant::fromValue(payload));
+        return r.toBool();
+    }
+
+    // Convenience overload with UTF-8 string payload.
+    bool sendString(const QString& contentTopic, const QString& payload) {
+        QByteArray ba = payload.toUtf8();
+        return send(contentTopic, ba);
+    }
 
 private:
     LogosAPI* m_api;
+    LogosAPIClient* m_client;
 };

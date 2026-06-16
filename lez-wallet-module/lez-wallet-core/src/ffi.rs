@@ -177,6 +177,39 @@ pub unsafe extern "C" fn lez_wallet_send(
     }
 }
 
+/// Send a shielded transfer to a FOREIGN account by NPK + VPK.
+///
+/// npk_hex: 64-char hex NullifierPublicKey of the recipient.
+/// vpk_hex: 66-char hex (compressed secp256k1) ViewingPublicKey of the recipient.
+/// amount_decimal: decimal string amount.
+///
+/// Returns the tx hash as a hex string, or `{"error": "..."}` on failure.
+/// The recipient MUST be a fresh account (never received) for the tx to settle.
+///
+/// # Safety
+/// All pointer arguments must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn lez_wallet_send_to(
+    home_dir: *const c_char,
+    npk_hex: *const c_char,
+    vpk_hex: *const c_char,
+    amount_decimal: *const c_char,
+) -> *mut c_char {
+    let args = [
+        unsafe { cstr_to_str(home_dir) },
+        unsafe { cstr_to_str(npk_hex) },
+        unsafe { cstr_to_str(vpk_hex) },
+        unsafe { cstr_to_str(amount_decimal) },
+    ];
+    let [Some(home), Some(npk), Some(vpk), Some(amt)] = args else {
+        return error_result("null argument");
+    };
+    match block_on(provider::send_to_foreign(Path::new(home), npk, vpk, amt)) {
+        Ok(tx_hash) => to_cstring(&tx_hash),
+        Err(e) => error_result(&e.to_string()),
+    }
+}
+
 /// Query program state (read-only).
 ///
 /// Returns a JSON string or `{"error": "..."}`.

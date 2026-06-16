@@ -19,6 +19,12 @@
 
 #include "agent_module_impl.h"
 
+// Generated SDK header providing modules(), bind_lez_wallet(), etc.
+// Included from sdk_generated/ at build time (logos-cpp-generator --general-only).
+#include "logos_sdk.h"
+#include "logos_mode.h"
+
+#include <QString>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -388,17 +394,20 @@ void AgentModuleImpl::send_owner_message(const std::string& text) {
         std::string owner_convo_id = impl_->cfg("owner_convo_id");
         std::string hex_content    = hex_encode(text);
         if (owner_convo_id.empty()) {
-            // No existing conversation; try to open one.
-            // TODO: verify API shape against logos-core source
-            // modules().chat_module.newPrivateConversation(owner_address_, hex_content);
-            // On success, store the returned convoId via meta_configure.
-            // For now, the call is marked as needing the generated glue:
-            (void)hex_content; // suppress unused-variable warning until glue is generated
+            QString convo_result = modules().chat_module.newPrivateConversation(
+                QString::fromStdString(owner_address_),
+                QString::fromStdString(hex_content));
+            json jr = safe_parse(convo_result.toStdString());
+            std::string cid = (jr.is_object() && jr.contains("convoId"))
+                              ? jr["convoId"].get<std::string>() : "";
+            if (!cid.empty()) {
+                impl_->config["owner_convo_id"] = cid;
+                impl_->save_config();
+            }
         } else {
-            // TODO: verify API shape against logos-core source
-            // modules().chat_module.sendMessage(owner_convo_id, hex_content);
-            (void)owner_convo_id;
-            (void)hex_content;
+            modules().chat_module.sendMessage(
+                QString::fromStdString(owner_convo_id),
+                QString::fromStdString(hex_content));
         }
     } catch (...) { /* owner unreachable; the event was already emitted */ }
 }
@@ -429,14 +438,21 @@ std::string AgentModuleImpl::storage_upload(const std::string& path, const std::
 
         std::string session_id = make_id("upload");
 
-        // TODO: verify API shape against logos-core source
-        // modules().storage_module.uploadUrl(
-        //     std::string("file://") + path,
-        //     int64_t(0)  // default chunkSize
-        // );
+        // Route the upload through the platform storage_module.
+        if (isContextReady()) {
+            try {
+                LogosResult res = modules().storage_module.uploadUrl(
+                    QString::fromStdString(std::string("file://") + path),
+                    int64_t(0)
+                );
+                if (res.success) {
+                    std::string sid = res.getString().toStdString();
+                    if (!sid.empty()) session_id = sid;
+                }
+            } catch (...) { /* best effort */ }
+        }
 
         // Record the label keyed on session_id; on storageUploadDone we remap to CID.
-        // For now, use path as a proxy key until the event fires.
         impl_->cid_labels["__pending__" + session_id] = label;
         impl_->save_cid_map();
 
@@ -460,19 +476,28 @@ std::string AgentModuleImpl::storage_upload(const std::string& path, const std::
 std::string AgentModuleImpl::storage_download(const std::string& address, const std::string& path) {
     ensure_loaded();
     try {
-        // TODO: verify API shape against logos-core source
-        // modules().storage_module.downloadToUrl(
-        //     address,                          // CID string
-        //     std::string("file://") + path,    // destination URL
-        //     true,                             // local = true (save to disk)
-        //     int64_t(0)                        // default chunkSize
-        // );
+        std::string status_str = "download_started";
+        if (isContextReady()) {
+            try {
+                LogosResult res = modules().storage_module.downloadToUrl(
+                    QString::fromStdString(address),
+                    QString::fromStdString(std::string("file://") + path),
+                    true
+                );
+                if (res.success) {
+                    status_str = "download_ok";
+                } else {
+                    status_str = "download_error: " + res.getError<QString>().toStdString();
+                }
+            } catch (const std::exception& ex) {
+                status_str = std::string("download_error: ") + ex.what();
+            } catch (...) { status_str = "download_error: unknown"; }
+        }
 
         json result = {
-            {"status",  "download_started"},
+            {"status",  status_str},
             {"cid",     address},
-            {"path",    path},
-            {"note",    "subscribe to task_update for completion"}
+            {"path",    path}
         };
         return ok(result);
     } catch (const std::exception& e) {
@@ -487,15 +512,40 @@ std::string AgentModuleImpl::storage_download(const std::string& address, const 
 std::string AgentModuleImpl::storage_list() {
     ensure_loaded();
     try {
-        // TODO: verify API shape against logos-core source
-        // auto res = modules().storage_module.manifests();
-        // json manifests = safe_parse(res.getString("manifests"));
+        // Query the storage_module for its manifest list.
+        json platform_entries = json::array();
+        if (isContextReady()) {
+            try {
+                LogosResult res = modules().storage_module.manifests();
+                if (res.success) {
+                    platform_entries = safe_parse(res.getString().toStdString());
+                }
+            } catch (...) {}
+        }
 
         // Merge with local cid->label map.
+        // Build a cid->platform_entry index first.
+        std::unordered_map<std::string, json> platform_idx;
+        if (platform_entries.is_array()) {
+            for (auto& entry : platform_entries) {
+                std::string cid = entry.value("cid", entry.value("id", ""));
+                if (!cid.empty()) platform_idx[cid] = entry;
+            }
+        }
+
         json entries = json::array();
+        // Add locally labeled entries (includes CIDs resolved from task_update events).
         for (auto& [cid, label] : impl_->cid_labels) {
-            if (cid.rfind("__pending__", 0) == 0) continue; // skip in-flight
-            entries.push_back({{"cid", cid}, {"label", label}});
+            if (cid.rfind("__pending__", 0) == 0) continue;
+            json e = {{"cid", cid}, {"label", label}};
+            if (platform_idx.count(cid)) e["platform"] = platform_idx[cid];
+            entries.push_back(e);
+        }
+        // Add platform entries not yet labeled locally.
+        for (auto& [cid, pentry] : platform_idx) {
+            if (!impl_->cid_labels.count(cid)) {
+                entries.push_back({{"cid", cid}, {"label", ""}, {"platform", pentry}});
+            }
         }
         return ok(entries);
     } catch (const std::exception& e) {
@@ -559,19 +609,27 @@ std::string AgentModuleImpl::messaging_send(const std::string& recipient, const 
         std::string convo_id  = impl_->cfg(convo_key);
 
         if (convo_id.empty()) {
-            // Open a new 1:1 E2E conversation (recipient is their intro bundle string).
-            // TODO: verify API shape against logos-core source
-            // auto res = modules().chat_module.newPrivateConversation(recipient, hex_content);
-            // convo_id = res.getString("convoId");
-            // Store it for subsequent sends.
-            // impl_->config[convo_key] = convo_id;
-            // impl_->save_config();
+            QString res = modules().chat_module.newPrivateConversation(
+                QString::fromStdString(recipient),
+                QString::fromStdString(hex_content));
+            // chat_module may return JSON {"convoId":"..."} or just "true" (async started).
+            // If JSON with convoId, cache it; otherwise mark as initiated (async).
+            json jr = safe_parse(res.toStdString());
+            if (jr.is_object() && jr.contains("convoId")) {
+                convo_id = jr["convoId"].get<std::string>();
+                if (!convo_id.empty()) {
+                    impl_->config[convo_key] = convo_id;
+                    impl_->save_config();
+                }
+            }
+            // If bool true, the message was dispatched asynchronously — treat as sent.
         } else {
-            // TODO: verify API shape against logos-core source
-            // modules().chat_module.sendMessage(convo_id, hex_content);
+            modules().chat_module.sendMessage(
+                QString::fromStdString(convo_id),
+                QString::fromStdString(hex_content));
         }
 
-        return ok({{"status", "sent"}, {"recipient", recipient}});
+        return ok({{"status", "sent"}, {"recipient", recipient}, {"convo_id", convo_id}});
     } catch (const std::exception& e) {
         skill_failed("messaging_send", e.what());
         return err(e.what());
@@ -588,8 +646,7 @@ std::string AgentModuleImpl::messaging_join(const std::string& group_id) {
         // We use delivery_module content topics as group transport.
         // group_id is treated as the content topic string.
 
-        // TODO: verify API shape against logos-core source
-        // modules().delivery_module.subscribe(group_id);
+        modules().delivery_module.subscribe(QString::fromStdString(group_id));
 
         // Record our membership.
         std::string groups_raw = impl_->cfg("joined_groups", "[]");
@@ -624,9 +681,7 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
         std::string group_id = make_id("group");
         std::string topic    = "/logos/agent-group/" + group_id + "/1/default/proto";
 
-        // Subscribe ourselves to the new topic.
-        // TODO: verify API shape against logos-core source
-        // modules().delivery_module.subscribe(topic);
+        modules().delivery_module.subscribe(QString::fromStdString(topic));
 
         // Distribute the topic to each member over 1:1 chat.
         json invite = {
@@ -640,9 +695,9 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
 
         for (const auto& member : members) {
             try {
-                // TODO: verify API shape against logos-core source
-                // modules().chat_module.newPrivateConversation(member, hex_invite);
-                (void)hex_invite;
+                modules().chat_module.newPrivateConversation(
+                    QString::fromStdString(member),
+                    QString::fromStdString(hex_invite));
             } catch (...) { /* continue sending to other members */ }
         }
 
@@ -673,28 +728,18 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
 // sets out_err. The bind call uses dependency-interface binding (LEARNING.md S4).
 // The generated accessor is: modules().bind_lez_wallet("lez_wallet_module")
 // TODO: verify API shape against logos-core source for bind_lez_wallet.
-#define BIND_LEZ_WALLET(wallet_var)                                              \
-    std::string lez_wallet_provider = impl_->cfg("lez_wallet_provider",          \
-                                                  "lez_wallet_module");           \
-    /* TODO: verify API shape against logos-core source */                        \
-    /* auto wallet_var = modules().bind_lez_wallet(lez_wallet_provider); */       \
-    /* For now we declare the variable name to keep subsequent code compilable  */ \
-    /* once the generated glue exists. */                                          \
-    (void)lez_wallet_provider;                                                    \
-    bool _wallet_bound = false; /* set to true once bind_lez_wallet is wired */   \
-    (void)_wallet_bound;
+// The logos_sdk.h generated from the wallet plugin provides modules().lez_wallet_module
+// as a typed LezWalletModule accessor (via the generator --plugin-path pass in cmake).
+#define BIND_LEZ_WALLET(wallet_var)                                                      \
+    auto& wallet_var = modules().lez_wallet_module;
 
 
 std::string AgentModuleImpl::wallet_balance() {
     ensure_loaded();
     try {
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string bal = wallet.balance();
-        // return ok({{"balance", bal}});
-
-        // Until the wallet module exists, return a structured not-yet-available result.
-        return ok({{"balance", "0"}, {"note", "lez_wallet_module not yet bound"}});
+        std::string bal = wallet.balance().toStdString();
+        return ok({{"balance", bal}});
     } catch (const std::exception& e) {
         skill_failed("wallet_balance", e.what());
         return err(e.what());
@@ -713,29 +758,84 @@ std::string AgentModuleImpl::wallet_send(const std::string& recipient, const std
         }
 
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string tx_hash = wallet.send(recipient, amount);
-        // json res_j = safe_parse(tx_hash);
-        // if (res_j.contains("error")) {
-        //     skill_failed("wallet_send", res_j["error"].get<std::string>());
-        //     return tx_hash; // passthrough error envelope
-        // }
-        // record_spend(parse_amount(amount));
-        // task_update("wallet_send_" + tx_hash, json{{"status","completed"},{"tx_hash",tx_hash}}.dump());
-        // return ok({{"tx_hash", tx_hash}, {"recipient", recipient}, {"amount", amount}});
-
-        return ok({
-            {"status",    "pending"},
-            {"note",      "lez_wallet_module not yet bound"},
-            {"recipient", recipient},
-            {"amount",    amount}
-        });
+        std::string tx_hash = wallet.send(QString::fromStdString(recipient),
+                                          QString::fromStdString(amount)).toStdString();
+        json res_j = safe_parse(tx_hash);
+        if (res_j.contains("error")) {
+            skill_failed("wallet_send", res_j["error"].get<std::string>());
+            return tx_hash; // passthrough error envelope
+        }
+        record_spend(parse_amount(amount));
+        task_update("wallet_send_" + tx_hash, json{{"status","completed"},{"tx_hash",tx_hash}}.dump());
+        return ok({{"tx_hash", tx_hash}, {"recipient", recipient}, {"amount", amount}});
     } catch (const std::exception& e) {
         skill_failed("wallet_send", e.what());
         return err(e.what());
     } catch (...) {
         skill_failed("wallet_send", "unknown error");
         return err("wallet_send: unknown error");
+    }
+}
+
+std::string AgentModuleImpl::wallet_send_to(const std::string& npk, const std::string& vpk, const std::string& amount) {
+    ensure_loaded();
+    try {
+        if (!within_threshold(amount)) {
+            // Store npk+vpk in the proposal for later execution by approve_pending.
+            json proposal = {
+                {"proposal_id",  make_id("prop")},
+                {"action",       "wallet_send_to"},
+                {"recipient",    npk},
+                {"vpk",          vpk},
+                {"amount",       amount},
+                {"reason",       "spend exceeds autonomous threshold"},
+                {"task_id",      ""},
+                {"status",       "pending_approval"},
+                {"created_at",   utc_now_iso()}
+            };
+            std::string proposal_id = proposal["proposal_id"].get<std::string>();
+            impl_->pending_proposals[proposal_id] = proposal;
+            impl_->save_pending();
+            approval_required(proposal_id, proposal.dump());
+            send_owner_message("approval_required: " + proposal.dump());
+            return json{{"status","pending_approval"},{"proposal_id",proposal_id},{"proposal",proposal}}.dump();
+        }
+
+        BIND_LEZ_WALLET(wallet)
+        // Use async with a 15-minute timeout to survive RISC0 real-mode proving.
+        // Fire task_update on completion; return immediately with proving_started.
+        std::string task_ref_id = make_id("send_to");
+        std::string npk_copy   = npk;
+        std::string amount_copy = amount;
+        wallet.send_toAsync(
+            QString::fromStdString(npk),
+            QString::fromStdString(vpk),
+            QString::fromStdString(amount),
+            [this, task_ref_id, npk_copy, amount_copy](QString result_qs) {
+                std::string tx_hash = result_qs.toStdString();
+                json res_j = safe_parse(tx_hash);
+                if (res_j.contains("error")) {
+                    skill_failed("wallet_send_to", res_j["error"].get<std::string>());
+                    task_update(task_ref_id,
+                        json{{"status","failed"},{"error",res_j["error"]}}.dump());
+                } else {
+                    record_spend(parse_amount(amount_copy));
+                    task_update(task_ref_id,
+                        json{{"status","completed"},{"tx_hash",tx_hash},
+                             {"npk",npk_copy},{"amount",amount_copy}}.dump());
+                }
+            },
+            Timeout(900000) // 15 minutes
+        );
+        return ok({{"status","proving_started"},{"task_id",task_ref_id},
+                   {"npk",npk},{"amount",amount},
+                   {"note","tx_hash arrives via task_update event when proof completes"}});
+    } catch (const std::exception& e) {
+        skill_failed("wallet_send_to", e.what());
+        return err(e.what());
+    } catch (...) {
+        skill_failed("wallet_send_to", "unknown error");
+        return err("wallet_send_to: unknown error");
     }
 }
 
@@ -869,12 +969,14 @@ std::string AgentModuleImpl::agent_card() {
         // Retrieve agent NPK (from lez_wallet if available, else config cache).
         std::string npk_val = impl_->cfg("agent_npk");
         if (npk_val.empty()) {
-            // TODO: verify API shape against logos-core source
-            // auto wallet = modules().bind_lez_wallet(impl_->cfg("lez_wallet_provider","lez_wallet_module"));
-            // npk_val = wallet.npk();
-            // impl_->config["agent_npk"] = npk_val;
-            // impl_->save_config();
-            npk_val = "npk_not_yet_available";
+            try {
+                BIND_LEZ_WALLET(wallet)
+                npk_val = wallet.npk().toStdString();
+                if (!npk_val.empty()) {
+                    impl_->config["agent_npk"] = npk_val;
+                    impl_->save_config();
+                }
+            } catch (...) { npk_val = "npk_unavailable"; }
         }
 
         // Build Agent Card per A2A spec + LEZ extensions (ARCHITECTURE.md S8, LEARNING.md S9).
@@ -952,20 +1054,28 @@ std::string AgentModuleImpl::agent_discover(const std::string& topic) {
             ? impl_->cfg("discovery_topic", kDefaultDiscoveryTopic)
             : topic;
 
-        // Subscribe to the discovery topic via delivery_module (LEARNING.md S5a).
-        // Incoming messages on this topic will fire the messageReceived event,
-        // which the generated wrapper routes to AgentModuleImpl's event subscriber.
-        // TODO: verify API shape against logos-core source
-        // modules().delivery_module.subscribe(effective_topic);
+        // Subscribe to the discovery topic via delivery_module.
+        modules().delivery_module.subscribe(QString::fromStdString(effective_topic));
+
+        // Publish our own Agent Card to the topic so peers can discover us.
+        std::string my_card_raw = agent_card();
+        json my_card_j = safe_parse(my_card_raw);
+        if (my_card_j.contains("result")) {
+            std::string card_str = my_card_j["result"].dump();
+            modules().delivery_module.sendString(
+                QString::fromStdString(effective_topic),
+                QString::fromStdString(card_str));
+        }
 
         // Store the topic so we can unsubscribe later.
         impl_->config["last_discover_topic"] = effective_topic;
         impl_->save_config();
 
         return ok({
-            {"status",  "subscribed"},
+            {"status",  "subscribed_and_published"},
             {"topic",   effective_topic},
-            {"note",    "agent cards will arrive via messageReceived event on this topic"}
+            {"card_published", true},
+            {"note",    "agent card published to topic; peer cards arrive via messageReceived event"}
         });
     } catch (const std::exception& e) {
         skill_failed("agent_discover", e.what());
@@ -983,17 +1093,33 @@ std::string AgentModuleImpl::agent_task(const std::string& agent_address,
     try {
         std::string task_id = make_id("task");
 
-        // Resolve the skill schema to get the declared LEZ price.
-        std::string skills_raw = meta_skills();
-        json skills_j = safe_parse(skills_raw);
-        if (skills_j.contains("result")) skills_j = skills_j["result"];
+        // Resolve skill price: prefer the peer's Agent Card (if agent_address is JSON),
+        // then fall back to our own skills list.
         std::string lez_price = "0";
-        if (skills_j.is_array()) {
-            for (auto& sk : skills_j) {
+        json addr_card = safe_parse(agent_address);
+        if (addr_card.is_object()) {
+            // Try peer card's skills array for this skill.
+            json peer_skills = addr_card.value("skills", json::array());
+            for (auto& sk : peer_skills) {
                 std::string sname = sk.value("name", sk.value("skill_name", ""));
                 if (sname == skill) {
-                    lez_price = sk.value("lez_price", "0");
+                    lez_price = sk.value("lez_price", sk.value("x-lez-price", "0"));
                     break;
+                }
+            }
+        }
+        if (lez_price == "0") {
+            // Fall back to our own skills list.
+            std::string skills_raw = meta_skills();
+            json skills_j = safe_parse(skills_raw);
+            if (skills_j.contains("result")) skills_j = skills_j["result"];
+            if (skills_j.is_array()) {
+                for (auto& sk : skills_j) {
+                    std::string sname = sk.value("name", sk.value("skill_name", ""));
+                    if (sname == skill) {
+                        lez_price = sk.value("lez_price", "0");
+                        break;
+                    }
                 }
             }
         }
@@ -1033,29 +1159,56 @@ std::string AgentModuleImpl::agent_task(const std::string& agent_address,
         std::string convo_id  = impl_->cfg(convo_key);
 
         if (convo_id.empty()) {
-            // TODO: verify API shape against logos-core source
-            // auto res = modules().chat_module.newPrivateConversation(agent_address, hex_payload);
-            // convo_id = res.getString("convoId");
-            // impl_->config[convo_key] = convo_id;
-            // impl_->save_config();
-            (void)hex_payload;
+            QString res = modules().chat_module.newPrivateConversation(
+                QString::fromStdString(agent_address),
+                QString::fromStdString(hex_payload));
+            json jr = safe_parse(res.toStdString());
+            if (jr.is_object() && jr.contains("convoId")) {
+                convo_id = jr["convoId"].get<std::string>();
+                if (!convo_id.empty()) {
+                    impl_->config[convo_key] = convo_id;
+                    impl_->save_config();
+                }
+            }
         } else {
-            // TODO: verify API shape against logos-core source
-            // modules().chat_module.sendMessage(convo_id, hex_payload);
+            modules().chat_module.sendMessage(
+                QString::fromStdString(convo_id),
+                QString::fromStdString(hex_payload));
         }
 
-        // If there is a price, gate + schedule the payment on task completion.
-        // For now, store the payment intent alongside the task.
+        // Attempt autonomous payment if the lez_price > 0.
+        // agent_address may be a JSON Agent Card string (from agent_discover) containing
+        // x-lez-identity.npk and x-lez-identity.vpk for the send_to path.
+        std::string pay_tx_hash;
+        std::string pay_npk;
+        std::string pay_vpk;
+        double price_d = parse_amount(lez_price);
+        if (price_d > 0.0) {
+            // Try to parse agent_address as an Agent Card JSON.
+            json addr_j = safe_parse(agent_address);
+            if (addr_j.is_object() && addr_j.contains("x-lez-identity")) {
+                pay_npk = addr_j["x-lez-identity"].value("npk", "");
+                pay_vpk = addr_j["x-lez-identity"].value("vpk", "");
+            }
+            if (!pay_npk.empty() && !pay_vpk.empty()) {
+                std::string pay_result = wallet_send_to(pay_npk, pay_vpk, lez_price);
+                json pr = safe_parse(pay_result);
+                if (pr.contains("result") && pr["result"].contains("tx_hash")) {
+                    pay_tx_hash = pr["result"]["tx_hash"].get<std::string>();
+                }
+            }
+        }
+
         json task_state = {
             {"task_id",       task_id},
             {"agent_address", agent_address},
             {"skill",         skill},
             {"params",        safe_parse(params)},
             {"lez_price",     lez_price},
+            {"pay_tx_hash",   pay_tx_hash},
             {"status",        "submitted"},
             {"created_at",    utc_now_iso()}
         };
-        // Persist task state in pending proposals map (reusing for all async state).
         impl_->pending_proposals["task_" + task_id] = task_state;
         impl_->save_pending();
 
@@ -1066,7 +1219,8 @@ std::string AgentModuleImpl::agent_task(const std::string& agent_address,
             {"status",        "submitted"},
             {"agent_address", agent_address},
             {"skill",         skill},
-            {"lez_price",     lez_price}
+            {"lez_price",     lez_price},
+            {"pay_tx_hash",   pay_tx_hash}
         });
     } catch (const std::exception& e) {
         skill_failed("agent_task", e.what());
@@ -1084,8 +1238,7 @@ std::string AgentModuleImpl::agent_subscribe(const std::string& agent_address,
         // Map A2A SubscribeToTask: subscribe to a per-task delivery topic (LEARNING.md S9).
         // Topic pattern: /logos/agent-task/<task_id>/1/stream/proto
         std::string task_topic = "/logos/agent-task/" + task_id + "/1/stream/proto";
-        // TODO: verify API shape against logos-core source
-        // modules().delivery_module.subscribe(task_topic);
+        modules().delivery_module.subscribe(QString::fromStdString(task_topic));
 
         // Store subscription so we know which topics to clean up on cancel.
         std::string sub_key = "task_sub_" + task_id;
@@ -1123,17 +1276,16 @@ std::string AgentModuleImpl::agent_cancel(const std::string& agent_address,
         std::string convo_key = "convo_" + agent_address;
         std::string convo_id  = impl_->cfg(convo_key);
         if (!convo_id.empty()) {
-            // TODO: verify API shape against logos-core source
-            // modules().chat_module.sendMessage(convo_id, hex_payload);
-            (void)hex_payload;
+            modules().chat_module.sendMessage(
+                QString::fromStdString(convo_id),
+                QString::fromStdString(hex_payload));
         }
 
         // Unsubscribe from the task topic.
         std::string sub_key   = "task_sub_" + task_id;
         std::string task_topic = impl_->cfg(sub_key);
         if (!task_topic.empty()) {
-            // TODO: verify API shape against logos-core source
-            // modules().delivery_module.unsubscribe(task_topic);
+            modules().delivery_module.unsubscribe(QString::fromStdString(task_topic));
             impl_->config.erase(sub_key);
             impl_->save_config();
         }
@@ -1399,6 +1551,15 @@ std::string AgentModuleImpl::approve_pending(const std::string& proposal_id) {
             exec_result = wallet_send(recipient, amount);
             per_tx_limit_     = saved_tx;
             per_period_limit_ = saved_period;
+        } else if (action == "wallet_send_to") {
+            std::string vpk_val = proposal.value("vpk", "");
+            std::string saved_tx     = per_tx_limit_;
+            std::string saved_period = per_period_limit_;
+            per_tx_limit_     = "0";
+            per_period_limit_ = "0";
+            exec_result = wallet_send_to(recipient, vpk_val, amount);
+            per_tx_limit_     = saved_tx;
+            per_period_limit_ = saved_period;
         } else if (action == "program_call") {
             // recipient is program_id for program_call; instruction + params are
             // stored in proposal if we saved them. Here we stored the full params
@@ -1489,4 +1650,41 @@ std::string AgentModuleImpl::reject_pending(const std::string& proposal_id) {
     } catch (...) {
         return err("reject_pending: unknown error");
     }
+}
+
+
+// ---------------------------------------------------------------------------
+// Event stub implementations
+// ---------------------------------------------------------------------------
+// These are declared as `logos_events:` in the header. Their bodies are normally
+// emitted by logos-cpp-generator in a sidecar events.cpp; since the generator we
+// are using does not produce events.cpp, we implement them manually here.
+// Each packs its args into a QVariantList (via void* to stay Qt-free in the header)
+// and forwards through emitEventImpl_() provided by LogosModuleContext.
+
+#include <QVariantList>
+#include <QVariant>
+
+void AgentModuleImpl::approval_required(const std::string& proposal_id,
+                                         const std::string& proposal_json) {
+    QVariantList args;
+    args << QVariant::fromValue(QString::fromStdString(proposal_id))
+         << QVariant::fromValue(QString::fromStdString(proposal_json));
+    emitEventImpl_("approval_required", &args);
+}
+
+void AgentModuleImpl::task_update(const std::string& task_id,
+                                   const std::string& status_json) {
+    QVariantList args;
+    args << QVariant::fromValue(QString::fromStdString(task_id))
+         << QVariant::fromValue(QString::fromStdString(status_json));
+    emitEventImpl_("task_update", &args);
+}
+
+void AgentModuleImpl::skill_failed(const std::string& skill,
+                                    const std::string& error) {
+    QVariantList args;
+    args << QVariant::fromValue(QString::fromStdString(skill))
+         << QVariant::fromValue(QString::fromStdString(error));
+    emitEventImpl_("skill_failed", &args);
 }

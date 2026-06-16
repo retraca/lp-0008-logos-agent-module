@@ -1,30 +1,52 @@
 #pragma once
-// Stub API for the Logos Core storage_module platform dependency.
-// The real implementation is injected by logos-core at runtime via LogosAPI.
-
 #include <QString>
+#include <QUrl>
+#include <QVariant>
+#include <QVariantList>
 #include "logos_api.h"
+#include "logos_api_client.h"
+#include "logos_types.h"
 
 class StorageModule {
 public:
-    explicit StorageModule(LogosAPI* api) : m_api(api) {}
+    explicit StorageModule(LogosAPI* api)
+        : m_api(api), m_client(api->getClient("storage_module")) {}
 
-    // Upload a file at `url` to Logos Storage.
-    // `chunkSize` 0 = default. Returns a session ID string.
-    QString uploadUrl(const QString& url, int64_t chunkSize) {
-        (void)url; (void)chunkSize;
-        return {};
+    // Upload a file at `url` (file:// URL) to Logos Storage.
+    // Returns a LogosResult; check .value for session_id.
+    LogosResult uploadUrl(const QUrl& url, int chunkSize = 0) {
+        QVariant r = m_client->invokeRemoteMethod(
+            "storage_module", "uploadUrl",
+            QVariant::fromValue(url), QVariant(chunkSize));
+        return r.value<LogosResult>();
     }
 
-    // Download a CID to a local URL.
-    // `local` = true stores to disk.
-    void downloadToUrl(const QString& cid, const QString& destUrl, bool local, int64_t chunkSize) {
-        (void)cid; (void)destUrl; (void)local; (void)chunkSize;
+    // Upload using QString URL (convenience).
+    LogosResult uploadUrl(const QString& url, int64_t chunkSize = 0) {
+        return uploadUrl(QUrl(url), static_cast<int>(chunkSize));
     }
 
-    // Return a JSON array of manifests for stored content.
-    QString manifests() { return "[]"; }
+    // Download a CID to a local path.
+    LogosResult downloadToUrl(const QString& cid, const QString& destUrl, bool local = true) {
+        QVariant r = m_client->invokeRemoteMethod(
+            "storage_module", "downloadToUrl",
+            QVariant(cid), QVariant::fromValue(QUrl(destUrl)), QVariant(local));
+        return r.value<LogosResult>();
+    }
+
+    // Return a LogosResult containing JSON array of manifests.
+    LogosResult manifests() {
+        QVariant r = m_client->invokeRemoteMethod("storage_module", "manifests");
+        return r.value<LogosResult>();
+    }
+
+    // Check if a CID exists.
+    LogosResult exists(const QString& cid) {
+        QVariant r = m_client->invokeRemoteMethod("storage_module", "exists", QVariant(cid));
+        return r.value<LogosResult>();
+    }
 
 private:
     LogosAPI* m_api;
+    LogosAPIClient* m_client;
 };

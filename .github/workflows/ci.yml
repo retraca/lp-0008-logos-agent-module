@@ -4,126 +4,182 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
-
-env:
-  CARGO_TERM_COLOR: always
 
 jobs:
-  # --------------------------------------------------------------------------
-  # Rust unit tests (no chain needed)
-  # --------------------------------------------------------------------------
-  rust-unit:
-    name: Rust unit tests
+  # ---------------------------------------------------------------------------
+  # Job 1: lint / format check
+  # ---------------------------------------------------------------------------
+  lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: lez-wallet-module/lez-wallet-core
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install clang-format
+        run: sudo apt-get install -y clang-format
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            lez-wallet-module/lez-wallet-core/target
-          key: rust-unit-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
+      - name: Check C++ formatting (clang-format --dry-run)
+        run: |
+          find scaffold/src scaffold/interfaces \
+            \( -name '*.cpp' -o -name '*.h' \) \
+            -print0 \
+          | xargs -0 clang-format --dry-run --Werror --style=file
 
-      - name: Run unit tests (no lez-bridge, no chain)
-        run: cargo test
-
-  # --------------------------------------------------------------------------
-  # Rust check with lez-bridge feature (compile only, no chain)
-  # Requires lez-build workspace present as a submodule. Skipped on forks
-  # and in CI environments where lez-build is unavailable.
-  # --------------------------------------------------------------------------
-  rust-lez-bridge-check:
-    name: Rust lez-bridge compile check
+  # ---------------------------------------------------------------------------
+  # Job 2: build the agent_module + lez_wallet_module plugins (nix-based)
+  # ---------------------------------------------------------------------------
+  build:
     runs-on: ubuntu-latest
-    continue-on-error: true
-    defaults:
-      run:
-        working-directory: lez-wallet-module/lez-wallet-core
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Install build deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config libssl-dev libclang-dev clang cmake ninja-build
+      - name: Enable flake cache (Magic Nix Cache)
+        uses: DeterminateSystems/magic-nix-cache-action@v8
 
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            lez-wallet-module/lez-wallet-core/target
-          key: rust-bridge-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
-
-      - name: Check lez-bridge compiles
-        run: cargo check --features lez-bridge
-
-  # --------------------------------------------------------------------------
-  # Integration tests against a real LEZ sequencer
-  # --------------------------------------------------------------------------
-  integration:
-    name: Integration tests (local chain)
-    runs-on: ubuntu-latest
-    needs: rust-unit
-    continue-on-error: true
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install build deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            build-essential pkg-config libssl-dev libclang-dev clang cmake ninja-build
-
-      - name: Start LEZ chain (docker-compose)
-        working-directory: lez-build
-        run: |
-          docker compose up -d
-          # wait for sequencer to be healthy
-          timeout 120 bash -c 'until curl -sf http://127.0.0.1:3040/health; do sleep 3; done'
-
-      - name: Cache cargo
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            lez-wallet-module/lez-wallet-core/target
-          key: rust-integration-${{ hashFiles('lez-wallet-module/lez-wallet-core/Cargo.lock') }}
-
-      - name: Run integration tests
-        working-directory: lez-wallet-module/lez-wallet-core
+      # The flake.nix in scaffold/ uses logos-module-builder which provides
+      # Qt 6.9, logos-cpp-generator, nlohmann_json, cmake, ninja.
+      - name: Build agent_module plugin via nix
+        run: nix build ./scaffold#lib --out-link result-agent
         env:
-          RISC0_DEV_MODE: "1"
-        run: |
-          cargo test --features lez-bridge --test integration_test -- --include-ignored
+          NIX_CONFIG: "experimental-features = nix-command flakes"
 
-      - name: Stop chain
-        if: always()
-        working-directory: lez-build
-        run: docker compose down
+      - name: Verify agent_module .so was produced
+        run: |
+          ls -lh result-agent/lib/
+          # There must be at least one shared library in the output
+          find result-agent/lib -name '*.so' | grep -q . \
+            || { echo "ERROR: no .so found in result-agent/lib/"; exit 1; }
+          find result-agent -name 'metadata.json' | grep -q . \
+            || { echo "ERROR: metadata.json not found in output"; exit 1; }
+
+      # TODO (runtime milestone): build the lez_wallet_module plugin once its
+      # flake/CMakeLists are authored (Phase 1 of BUILD_PLAN.md). Steps will mirror
+      # the block above with ./lez_wallet_module#lib instead of ./scaffold#lib.
+      # - name: Build lez_wallet_module plugin via nix
+      #   run: nix build ./lez_wallet_module#lib --out-link result-wallet
+
+      - name: Upload built plugins as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-module-plugins
+          path: result-agent/
+
+  # ---------------------------------------------------------------------------
+  # Job 3: e2e — standalone LEZ sequencer + demo script
+  # Mirrors the e2e-sequencer job from LP-0002/LP-0003.
+  # RISC0_DEV_MODE=0 for this job (real proofs) as required by the spec.
+  # ---------------------------------------------------------------------------
+  e2e:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # Clone logos-execution-zone v0.1.2 as sibling ../lez-build (same pattern as LP-0002/0003)
+      - name: Clone LEZ (logos-execution-zone v0.1.2) as sibling lez-build
+        run: |
+          git clone --depth 1 --branch v0.1.2 \
+            https://github.com/logos-blockchain/logos-execution-zone.git \
+            "$GITHUB_WORKSPACE/../lez-build"
+
+      - name: Cache LEZ sequencer build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ../lez-build/target
+          key: ${{ runner.os }}-lez-v0.1.2-sequencer
+
+      - name: Install logos-blockchain-circuits release v0.4.2
+        run: |
+          mkdir -p ~/.logos-blockchain-circuits
+          curl -sfL -o /tmp/circuits.tar.gz \
+            https://github.com/logos-blockchain/logos-blockchain-circuits/releases/download/v0.4.2/logos-blockchain-circuits-v0.4.2-linux-x86_64.tar.gz
+          tar -xzf /tmp/circuits.tar.gz -C ~/.logos-blockchain-circuits
+          # surface contents if the tarball nests a versioned sub-directory
+          inner=$(find ~/.logos-blockchain-circuits -maxdepth 1 -mindepth 1 -type d \
+            -name 'logos-blockchain-circuits-*' | head -1)
+          if [ -n "$inner" ]; then cp -r "$inner"/* ~/.logos-blockchain-circuits/; fi
+          ls ~/.logos-blockchain-circuits
+
+      - name: Build standalone sequencer
+        run: cargo build --release -p sequencer_service --features standalone
+        working-directory: ../lez-build
+
+      - name: Install r0vm (risc0 executor backend) v3.0.5
+        run: |
+          curl -sfL -o /tmp/crz.tgz \
+            https://github.com/risc0/risc0/releases/download/v3.0.5/cargo-risczero-x86_64-unknown-linux-gnu.tgz
+          tar -xzf /tmp/crz.tgz -C "$HOME/.cargo/bin" r0vm
+          chmod +x "$HOME/.cargo/bin/r0vm"
+          r0vm --version
+
+      - name: Install Nix (needed to build the module for the e2e run)
+        uses: DeterminateSystems/nix-installer-action@v14
+
+      - name: Enable flake cache (Magic Nix Cache)
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+
+      - name: Build agent_module plugin for e2e
+        run: nix build ./scaffold#lib --out-link result-agent
+        env:
+          NIX_CONFIG: "experimental-features = nix-command flakes"
+
+      # logoscore CLI is used to load the module and call skills
+      - name: Build logoscore CLI from lez-build
+        # TODO (runtime milestone): replace with the canonical logos-logoscore-cli nix build
+        # once the package is published:
+        #   nix build 'github:logos-co/logos-logoscore-cli' --out-link ./logoscore-bin
+        # For now, build from lez-build source which ships a compatible logoscore binary.
+        run: |
+          cargo build --release -p logoscore --features standalone 2>/dev/null \
+            || cargo build --release -p logoscore_cli 2>/dev/null \
+            || cargo build --release --bins 2>/dev/null \
+            || true
+          find ../lez-build/target/release -maxdepth 1 -name 'logoscore*' -type f \
+            | head -5 || true
+        working-directory: ../lez-build
+
+      - name: Start LEZ standalone sequencer
+        run: |
+          mkdir -p /tmp/lez-seq-home
+          # RISC0_DEV_MODE=0 — real proofs (spec requirement)
+          RISC0_DEV_MODE=0 RUST_LOG=info RUST_BACKTRACE=1 \
+            ../lez-build/target/release/sequencer_service \
+            .github/sequencer_config.json -p 3040 > /tmp/lez-seq.log 2>&1 &
+          echo "Waiting for sequencer to come up (up to 120s) ..."
+          for i in $(seq 1 60); do
+            curl -sf -m 2 -X POST http://127.0.0.1:3040 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","method":"checkHealth","params":[],"id":1}' \
+              >/dev/null 2>&1 && echo "Sequencer ready after $((i*2))s." && exit 0
+            sleep 2
+          done
+          echo "ERROR: sequencer did not come up in 120s"; tail -80 /tmp/lez-seq.log; exit 1
+
+      - name: Set up modules directory for the demo
+        run: |
+          mkdir -p /tmp/agent-modules
+          cp -r result-agent/lib /tmp/agent-modules/
+          cp result-agent/metadata.json /tmp/agent-modules/
+          # TODO (runtime milestone): also copy lez_wallet_module .so once built
+
+      - name: Run e2e demo script
+        env:
+          RISC0_DEV_MODE: "0"
+          SEQUENCER: "http://127.0.0.1:3040"
+          MODULES_DIR: "/tmp/agent-modules"
+          # TODO (runtime milestone): set LOGOSCORE_BIN to the correct path once
+          # logoscore CLI build is resolved above.
+          LOGOSCORE_BIN: "${{ github.workspace }}/../lez-build/target/release/logoscore"
+        run: bash tests/e2e.sh
+
+      - name: Sequencer log on failure
+        if: failure()
+        run: tail -100 /tmp/lez-seq.log

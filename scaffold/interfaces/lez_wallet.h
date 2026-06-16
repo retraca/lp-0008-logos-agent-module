@@ -33,6 +33,9 @@ public:
     // The spending-threshold gate lives in the AGENT module, not here (ARCHITECTURE S5).
     std::string send(const std::string& recipient, const std::string& amount_decimal);
 
+    // Agent-to-agent transfer by NPK+VPK (foreign account). Returns tx hash on success.
+    std::string send_to(const std::string& npk_hex, const std::string& vpk_hex, const std::string& amount_decimal);
+
     // --- programs (LEARNING.md S6c) ---
     std::string program_query(const std::string& program_id, const std::string& params_json);
     std::string program_call(const std::string& program_id,

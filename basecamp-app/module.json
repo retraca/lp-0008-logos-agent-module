@@ -1,0 +1,12 @@
+{
+  "name": "ai_agent_module",
+  "version": "0.1.0",
+  "description": "LP-0008 owner console: monitor agent status, approve/reject pending spends, configure thresholds, and send owner-channel messages",
+  "author": "retraca",
+  "type": "mini-app",
+  "category": "agent",
+  "interface": "basecamp",
+  "main": "index.html",
+  "capabilities": [],
+  "dependencies": []
+}
