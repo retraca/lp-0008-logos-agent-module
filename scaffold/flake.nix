@@ -19,7 +19,7 @@
         buildInputs = with pkgs; [
           qt6.qtbase
           qt6.qtremoteobjects
-          nlohmann-json
+          nlohmann_json
           cmake
           ninja
         ];
