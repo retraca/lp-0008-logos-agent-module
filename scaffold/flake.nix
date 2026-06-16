@@ -40,6 +40,11 @@
 
           inherit buildInputs nativeBuildInputs;
 
+          # The plugin is a shared library, not a Qt application — disable the
+          # qtbase app-wrapping hook (otherwise the build aborts in qtPreHook with
+          # "depends on qtbase, but no wrapping behavior was specified").
+          dontWrapQtApps = true;
+
           QT_PLUGIN_PATH = "${pkgs.qt6.qtbase}/${pkgs.qt6.qtbase.qtPluginPrefix}";
 
           cmakeFlags = [
