@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <QString>
 #include <QVariant>
 #include <QVariantList>
@@ -9,8 +10,12 @@
 
 class ChatModule {
 public:
+    explicit ChatModule(const std::string& module_name)
+        : m_api(new LogosAPI(QString::fromStdString(module_name))),
+          m_client(m_api->getClient(QString::fromStdString(module_name))) {}
+
     explicit ChatModule(LogosAPI* api)
-        : m_api(api), m_client(api->getClient("chat_module")) {}
+        : m_api(api), m_owns(false), m_client(api->getClient("chat_module")) {}
 
     // Open a 1:1 E2E encrypted conversation.
     // Returns JSON {"convoId":"...", "status":"..."}
@@ -49,5 +54,6 @@ public:
 
 private:
     LogosAPI* m_api;
+    bool m_owns = true;
     LogosAPIClient* m_client;
 };

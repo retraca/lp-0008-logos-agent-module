@@ -1,4 +1,5 @@
 #pragma once
+#include <string>
 #include <QString>
 #include <QByteArray>
 #include <QVariant>
@@ -8,8 +9,12 @@
 
 class DeliveryModule {
 public:
+    explicit DeliveryModule(const std::string& module_name)
+        : m_api(new LogosAPI(QString::fromStdString(module_name))),
+          m_client(m_api->getClient(QString::fromStdString(module_name))) {}
+
     explicit DeliveryModule(LogosAPI* api)
-        : m_api(api), m_client(api->getClient("delivery_module")) {}
+        : m_api(api), m_owns(false), m_client(api->getClient("delivery_module")) {}
 
     // Subscribe to a Waku content topic.
     bool subscribe(const QString& contentTopic) {
@@ -44,5 +49,6 @@ public:
 
 private:
     LogosAPI* m_api;
+    bool m_owns = true;
     LogosAPIClient* m_client;
 };
