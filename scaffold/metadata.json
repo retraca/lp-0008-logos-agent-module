@@ -27,9 +27,7 @@
       "impl_class": "ISkill"
     }
   ],
-  "include": [
-    "interfaces"
-  ],
+  "include": [],
   "capabilities": [],
   "nix": {
     "packages": {
