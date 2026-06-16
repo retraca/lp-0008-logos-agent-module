@@ -738,7 +738,7 @@ std::string AgentModuleImpl::wallet_balance() {
     ensure_loaded();
     try {
         BIND_LEZ_WALLET(wallet)
-        std::string bal = wallet.balance().toStdString();
+        std::string bal = wallet.balance();
         return ok({{"balance", bal}});
     } catch (const std::exception& e) {
         skill_failed("wallet_balance", e.what());
@@ -758,8 +758,7 @@ std::string AgentModuleImpl::wallet_send(const std::string& recipient, const std
         }
 
         BIND_LEZ_WALLET(wallet)
-        std::string tx_hash = wallet.send(QString::fromStdString(recipient),
-                                          QString::fromStdString(amount)).toStdString();
+        std::string tx_hash = wallet.send(recipient, amount);
         json res_j = safe_parse(tx_hash);
         if (res_j.contains("error")) {
             skill_failed("wallet_send", res_j["error"].get<std::string>());
@@ -808,11 +807,10 @@ std::string AgentModuleImpl::wallet_send_to(const std::string& npk, const std::s
         std::string npk_copy   = npk;
         std::string amount_copy = amount;
         wallet.send_toAsync(
-            QString::fromStdString(npk),
-            QString::fromStdString(vpk),
-            QString::fromStdString(amount),
-            [this, task_ref_id, npk_copy, amount_copy](QString result_qs) {
-                std::string tx_hash = result_qs.toStdString();
+            npk,
+            vpk,
+            amount,
+            [this, task_ref_id, npk_copy, amount_copy](std::string tx_hash) {
                 json res_j = safe_parse(tx_hash);
                 if (res_j.contains("error")) {
                     skill_failed("wallet_send_to", res_j["error"].get<std::string>());
@@ -824,8 +822,7 @@ std::string AgentModuleImpl::wallet_send_to(const std::string& npk, const std::s
                         json{{"status","completed"},{"tx_hash",tx_hash},
                              {"npk",npk_copy},{"amount",amount_copy}}.dump());
                 }
-            },
-            Timeout(900000) // 15 minutes
+            }
         );
         return ok({{"status","proving_started"},{"task_id",task_ref_id},
                    {"npk",npk},{"amount",amount},
@@ -971,7 +968,7 @@ std::string AgentModuleImpl::agent_card() {
         if (npk_val.empty()) {
             try {
                 BIND_LEZ_WALLET(wallet)
-                npk_val = wallet.npk().toStdString();
+                npk_val = wallet.npk();
                 if (!npk_val.empty()) {
                     impl_->config["agent_npk"] = npk_val;
                     impl_->save_config();
