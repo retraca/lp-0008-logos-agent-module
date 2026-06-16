@@ -12,36 +12,32 @@
 // NPK (NullifierPublicKey [u8;32], identity) -> private AccountId; VPK for viewing.
 // Amounts are u128 in nssa; represented here as decimal strings to stay within the
 // universal wire types (no native u128). Recipients are base58 account ids / NPKs.
+//
+// NOTE: All methods use std::string params only (no int64_t, no bool return)
+// so the logos-cpp-generator correctly generates the Qt bound interface wrapper.
+// history() passes limit as a decimal string; sync_private() returns "ok"/"error".
 
 #include <string>
-#include <cstdint>
 
 class ILezWallet {
 public:
     // --- identity ---
-    // Create/return the agent's shielded private account; returns its AccountId (base58).
-    std::string ensure_account();          // idempotent; inits keystore + mnemonic on first call
-    std::string npk();                     // agent NullifierPublicKey (base58/hex)
+    std::string ensure_account(const std::string& unused = "");
+    std::string npk(const std::string& unused = "");
 
     // --- balance / history ---
-    std::string balance();                 // decimal-string token balance of the shielded account
-    std::string history(int64_t limit);    // JSON array of recent transfers (post-sync)
-    bool        sync_private();             // scan chain for this account's latest private state
+    std::string balance(const std::string& unused = "");
+    std::string history(const std::string& limit_decimal);
+    std::string sync_private(const std::string& unused = "");
 
     // --- transfers ---
-    // Shielded transfer. Returns tx hash (hex) on success, error envelope otherwise.
-    // The spending-threshold gate lives in the AGENT module, not here (ARCHITECTURE S5).
     std::string send(const std::string& recipient, const std::string& amount_decimal);
-
-    // Agent-to-agent transfer by NPK+VPK (foreign account). Returns tx hash on success.
     std::string send_to(const std::string& npk_hex, const std::string& vpk_hex, const std::string& amount_decimal);
 
     // --- programs (LEARNING.md S6c) ---
     std::string program_query(const std::string& program_id, const std::string& params_json);
-    std::string program_call(const std::string& program_id,
-                             const std::string& instruction,
-                             const std::string& params_json);   // builds+signs+posts SignedMantleTx
-    std::string program_deploy(const std::string& binary_path); // ProgramDeploymentTransaction -> program id
+    std::string program_call(const std::string& program_id, const std::string& instruction, const std::string& params_json);
+    std::string program_deploy(const std::string& binary_path);
 
 logos_events:
     void tx_settled(const std::string& tx_hash, int64_t timestamp);

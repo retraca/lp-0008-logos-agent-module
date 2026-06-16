@@ -731,7 +731,7 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
 // The logos_sdk.h generated from the wallet plugin provides modules().lez_wallet_module
 // as a typed LezWalletModule accessor (via the generator --plugin-path pass in cmake).
 #define BIND_LEZ_WALLET(wallet_var)                                                      \
-    auto& wallet_var = modules().lez_wallet_module;
+    auto wallet_var = modules().bind_lez_wallet("lez_wallet_module");
 
 
 std::string AgentModuleImpl::wallet_balance() {
