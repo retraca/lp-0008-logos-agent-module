@@ -1059,9 +1059,9 @@ std::string AgentModuleImpl::agent_discover(const std::string& topic) {
         json my_card_j = safe_parse(my_card_raw);
         if (my_card_j.contains("result")) {
             std::string card_str = my_card_j["result"].dump();
-            modules().delivery_module.sendString(
+            modules().delivery_module.send(
                 QString::fromStdString(effective_topic),
-                QString::fromStdString(card_str));
+                QVariant(QString::fromStdString(card_str)));
         }
 
         // Store the topic so we can unsubscribe later.
