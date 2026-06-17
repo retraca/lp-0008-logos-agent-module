@@ -244,20 +244,19 @@ fn cmd_deploy(logoscore: &PathBuf, sequencer: &str, args: &DeployArgs) -> Result
     let child = spawn_daemon(logoscore, sequencer, &modules_dir)?;
     let child_id = child.id();
 
-    // Wait until the agent_module is responsive, then load it.
+    // Give daemon time to start capability_module.
     println!("[agent-cli] Waiting for daemon to become ready …");
-    wait_for_daemon(logoscore, sequencer, &modules_dir)?;
+    wait_for_capability(logoscore)?;
     println!("[agent-cli] Daemon ready (PID {child_id}).");
 
-    println!("[agent-cli] Loading agent_module …");
-    logos_call(
-        logoscore,
-        sequencer,
-        &modules_dir,
-        "agent_module",
-        "meta.status()",
-        true,
-    )?;
+    // Load all external modules discovered in the modules_dir.
+    println!("[agent-cli] Loading modules from {} …", modules_dir.display());
+    load_all_modules(logoscore, &modules_dir)?;
+    println!("[agent-cli] All modules loaded.");
+
+    // Now wait for agent_module to respond to meta_status.
+    println!("[agent-cli] Waiting for agent_module to respond …");
+    wait_for_daemon(logoscore, sequencer, &modules_dir)?;
     println!("[agent-cli] agent_module loaded and responding.");
 
     if args.detach {
@@ -269,6 +268,67 @@ fn cmd_deploy(logoscore: &PathBuf, sequencer: &str, args: &DeployArgs) -> Result
         wait_for_child(child)?;
     }
 
+    Ok(())
+}
+
+/// Wait until the capability_module is loaded (daemon is responsive).
+fn wait_for_capability(logoscore: &PathBuf) -> Result<()> {
+    let timeout = Duration::from_secs(30);
+    let poll_interval = Duration::from_millis(500);
+    let start = Instant::now();
+
+    loop {
+        if start.elapsed() > timeout {
+            bail!("daemon did not start within {timeout:?}");
+        }
+        let output = Command::new(logoscore)
+            .arg("status")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output();
+        if let Ok(o) = output {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            if stdout.contains("\"running\"") {
+                return Ok(());
+            }
+        }
+        thread::sleep(poll_interval);
+    }
+}
+
+/// Load every module subdirectory found in the modules_dir.
+///
+/// Uses `logoscore load-module <name>` for each subdirectory.
+fn load_all_modules(logoscore: &PathBuf, modules_dir: &PathBuf) -> Result<()> {
+    let entries = std::fs::read_dir(modules_dir)
+        .with_context(|| format!("cannot read modules_dir: {}", modules_dir.display()))?;
+
+    let mut names: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+        .filter_map(|e| e.file_name().into_string().ok())
+        .collect();
+
+    // Load dependency modules first, agent_module last.
+    names.sort_by_key(|n| if n == "agent_module" { 1 } else { 0 });
+
+    for name in &names {
+        println!("[agent-cli] load-module {name} …");
+        let output = Command::new(logoscore)
+            .arg("load-module")
+            .arg(name)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .with_context(|| format!("failed to run logoscore load-module {name}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !output.status.success() {
+            eprintln!("[agent-cli] warning: load-module {name} failed: {stderr}");
+        } else {
+            println!("[agent-cli] {name}: {}", stdout.trim());
+        }
+    }
     Ok(())
 }
 
@@ -285,11 +345,9 @@ fn cmd_configure(logoscore: &PathBuf, sequencer: &str, args: &ConfigureArgs) -> 
     ];
 
     for (key, value) in &pairs {
-        println!("[agent-cli] meta.configure({key} = {value})");
-        // JSON-encode both operands so a value containing a quote, backslash, or
-        // newline cannot break out of the string literal and inject extra call
-        // syntax into the logoscore expression.
-        let expr = format!("meta.configure({}, {})", json_str(key), json_str(value));
+        println!("[agent-cli] meta_configure({key} = {value})");
+        // Use the positional-arg form: meta_configure(key, value)
+        let expr = format!("meta_configure({}, {})", json_str(key), json_str(value));
         logos_call(logoscore, sequencer, &modules_dir, "agent_module", &expr, false)?;
     }
 
@@ -343,7 +401,7 @@ fn cmd_status(logoscore: &PathBuf, sequencer: &str, args: &StatusArgs) -> Result
         sequencer,
         &modules_dir,
         "agent_module",
-        "meta.status()",
+        "meta_status()",
         false,
     )?;
     println!("{output}");
@@ -393,13 +451,13 @@ fn cmd_up(logoscore: &PathBuf, sequencer: &str, args: UpArgs) -> Result<()> {
 /// Spawn the `logoscore` daemon (`-D` flag) and return the child process.
 ///
 /// The daemon's stdout/stderr are inherited so the operator can see its logs.
-fn spawn_daemon(logoscore: &PathBuf, sequencer: &str, modules_dir: &PathBuf) -> Result<Child> {
+fn spawn_daemon(logoscore: &PathBuf, _sequencer: &str, modules_dir: &PathBuf) -> Result<Child> {
+    // Note: the daemon (-D) does not accept a -s sequencer flag; the sequencer URL
+    // is configured per-module (e.g. lez_wallet_module reads it from its own config).
     let child = Command::new(logoscore)
         .arg("-D")
         .arg("-m")
         .arg(modules_dir)
-        .arg("-s")
-        .arg(sequencer)
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .spawn()
@@ -420,7 +478,7 @@ fn wait_for_daemon(logoscore: &PathBuf, sequencer: &str, modules_dir: &PathBuf) 
             bail!("daemon did not become ready within {timeout:?}");
         }
 
-        match logos_call(logoscore, sequencer, modules_dir, "agent_module", "meta.status()", true) {
+        match logos_call(logoscore, sequencer, modules_dir, "agent_module", "meta_status()", true) {
             Ok(_) => return Ok(()),
             Err(_) => {
                 thread::sleep(poll_interval);
@@ -441,27 +499,72 @@ fn wait_for_daemon(logoscore: &PathBuf, sequencer: &str, modules_dir: &PathBuf) 
 ///
 /// Returns the stdout of the call on success, or an error if logoscore exits
 /// non-zero or the response contains an `"error"` top-level key.
+/// Parse a legacy-style call expression like `meta.configure("key", "val")` or
+/// `meta.status()` into a (method, args) pair for the `logoscore call` subcommand.
+///
+/// The `logoscore call <module> <method> [args...]` API takes the method name as a
+/// positional argument and any parameters as subsequent positional arguments.
+/// This function strips the surrounding `func(...)` shell, extracts the method name
+/// from the dotted path, and returns any comma-separated string arguments.
+fn parse_call_expr(expr: &str) -> (String, Vec<String>) {
+    // Find the opening paren.
+    let paren = match expr.find('(') {
+        Some(p) => p,
+        None => return (expr.to_string(), vec![]),
+    };
+    let func_path = &expr[..paren];
+    // Use only the last segment (e.g. "meta.configure" → "meta_configure").
+    let method = func_path
+        .split('.')
+        .last()
+        .unwrap_or(func_path)
+        .replace('.', "_");
+
+    // Extract content inside parens.
+    let inner = expr[paren + 1..].trim_end_matches(')');
+    if inner.trim().is_empty() {
+        return (method, vec![]);
+    }
+
+    // Split on commas and strip surrounding quotes from each argument.
+    let args: Vec<String> = inner
+        .split(',')
+        .map(|s| {
+            let s = s.trim();
+            if (s.starts_with('"') && s.ends_with('"'))
+                || (s.starts_with('\'') && s.ends_with('\''))
+            {
+                // Unescape simple JSON string escapes.
+                s[1..s.len() - 1]
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\")
+            } else {
+                s.to_string()
+            }
+        })
+        .collect();
+
+    (method, args)
+}
+
 fn logos_call(
     logoscore: &PathBuf,
-    sequencer: &str,
-    modules_dir: &PathBuf,
+    _sequencer: &str,
+    _modules_dir: &PathBuf,
     module: &str,
     expr: &str,
     suppress_output: bool,
 ) -> Result<String> {
+    // The logoscore CLI uses: logoscore call <module> <method> [args...]
+    // There is no -s / -l / -c / --quit-on-finish in this version.
+    let (method, call_args) = parse_call_expr(expr);
+
     let mut cmd = Command::new(logoscore);
-    cmd.arg("-m")
-        .arg(modules_dir)
-        .arg("-s")
-        .arg(sequencer)
-        .arg("-l")
-        .arg(module)
-        .arg("-c")
-        .arg(expr)
-        .arg("--quit-on-finish")
-        .arg("--json-output")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
+    cmd.arg("call").arg(module).arg(&method);
+    for a in &call_args {
+        cmd.arg(a);
+    }
+    cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
     let output = cmd
         .output()
