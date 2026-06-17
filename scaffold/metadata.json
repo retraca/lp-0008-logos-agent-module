@@ -5,7 +5,7 @@
   "author": "",
   "type": "core",
   "category": "agent",
-  "interface": "qt",
+  "interface": "universal",
   "main": "agent_module_plugin",
   "codegen": {
     "impl_header": "src/agent_module_impl.h"
