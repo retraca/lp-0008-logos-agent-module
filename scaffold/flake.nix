@@ -33,5 +33,11 @@
       src = ./.;
       configFile = ./metadata.json;
       flakeInputs = inputs;
+      # Ship metadata.json inside the plugin (#lib) output so the runtime loader
+      # and CI (which copies result-agent/metadata.json) can find it next to the
+      # built .so. The backend install only places the plugin lib, not metadata.
+      postInstall = ''
+        cp ${./metadata.json} $out/metadata.json
+      '';
     };
 }
