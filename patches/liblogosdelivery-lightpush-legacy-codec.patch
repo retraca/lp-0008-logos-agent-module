@@ -1,0 +1,83 @@
+--- logos_delivery/messaging/delivery_service/send_service.nim
+--- logos_delivery/messaging/delivery_service/send_service/lightpush_processor.nim
+--- /nix/store/gpry81b5xbxiv79529cyx2k8akcwfg0y-source/logos_delivery/messaging/delivery_service/send_service/lightpush_processor.nim	1970-01-01 07:00:01
++++ /private/tmp/logos-delivery-patched/logos_delivery/messaging/delivery_service/send_service/lightpush_processor.nim	2026-06-17 11:35:20
+@@ -4,21 +4,27 @@
+ import
+   logos_delivery/waku/node/peer_manager,
+   logos_delivery/waku/waku_core,
+-  logos_delivery/waku/waku_lightpush/[common, client, rpc]
++  logos_delivery/waku/waku_lightpush_legacy/[common, client]
+ 
+ import ./[delivery_task, send_processor]
+ 
+ logScope:
+   topics = "send service lightpush processor"
+ 
++# NOTE: Uses the legacy lightpush codec (/vac/waku/lightpush/2.0.0-beta1) because
++# nwaku v0.24-v0.33 only register the legacy wire handler despite 3.0.0 being in
++# their identify advertisement. The modern client (3.0.0) fails multistream-select
++# against all tested nwaku relay versions. This patch can be reverted once nwaku
++# relay nodes consistently expose /vac/waku/lightpush/3.0.0 as an actual handler.
++
+ type LightpushSendProcessor* = ref object of BaseSendProcessor
+   peerManager: PeerManager
+-  lightpushClient: WakuLightPushClient
++  lightpushClient: WakuLegacyLightPushClient
+ 
+ proc new*(
+     T: typedesc[LightpushSendProcessor],
+     peerManager: PeerManager,
+-    lightpushClient: WakuLightPushClient,
++    lightpushClient: WakuLegacyLightPushClient,
+     brokerCtx: BrokerContext,
+ ): T =
+   return
+@@ -27,7 +33,7 @@
+ proc isLightpushPeerAvailable(
+     self: LightpushSendProcessor, pubsubTopic: PubsubTopic
+ ): bool =
+-  return self.peerManager.selectPeer(WakuLightPushCodec, some(pubsubTopic)).isSome()
++  return self.peerManager.selectPeer(WakuLegacyLightPushCodec, some(pubsubTopic)).isSome()
+ 
+--- logos_delivery/messaging/delivery_service/send_service/send_service.nim
+--- /nix/store/gpry81b5xbxiv79529cyx2k8akcwfg0y-source/logos_delivery/messaging/delivery_service/send_service/send_service.nim	1970-01-01 07:00:01
++++ /private/tmp/logos-delivery-patched/logos_delivery/messaging/delivery_service/send_service/send_service.nim	2026-06-17 11:35:40
+@@ -15,7 +15,8 @@
+     waku_store/common,
+     waku_relay/protocol,
+     waku_rln_relay/rln_relay,
+-    waku_lightpush/client,
++    waku_lightpush_legacy/client,
++    waku_lightpush_legacy/common,
+     waku_lightpush/callbacks,
+     events/message_events,
+   ]
+@@ -61,7 +62,7 @@
+ 
+ proc setupSendProcessorChain(
+     peerManager: PeerManager,
+-    lightpushClient: WakuLightPushClient,
++    lightpushClient: WakuLegacyLightPushClient,
+     relay: WakuRelay,
+     rlnRelay: WakuRLNRelay,
+     brokerCtx: BrokerContext,
+@@ -97,15 +98,15 @@
+ proc new*(
+     T: typedesc[SendService], preferP2PReliability: bool, w: WakuNode
+ ): Result[T, string] =
+-  if w.wakuRelay.isNil() and w.wakuLightpushClient.isNil():
++  if w.wakuRelay.isNil() and w.wakuLegacyLightpushClient.isNil():
+     return err(
+-      "Could not create SendService. wakuRelay or wakuLightpushClient should be set"
++      "Could not create SendService. wakuRelay or wakuLegacyLightpushClient should be set"
+     )
+ 
+   let checkStoreForMessages = preferP2PReliability and not w.wakuStoreClient.isNil()
+ 
+   let sendProcessorChain = setupSendProcessorChain(
+-    w.peerManager, w.wakuLightPushClient, w.wakuRelay, w.wakuRlnRelay, w.brokerCtx
++    w.peerManager, w.wakuLegacyLightpushClient, w.wakuRelay, w.wakuRlnRelay, w.brokerCtx
+   ).valueOr:
+     return err("failed to setup SendProcessorChain: " & $error)
+ 
