@@ -24,7 +24,6 @@
 #include "logos_sdk.h"
 #include "logos_mode.h"
 
-#include <QString>
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
@@ -394,20 +393,14 @@ void AgentModuleImpl::send_owner_message(const std::string& text) {
         std::string owner_convo_id = impl_->cfg("owner_convo_id");
         std::string hex_content    = hex_encode(text);
         if (owner_convo_id.empty()) {
-            QString convo_result = modules().chat_module.newPrivateConversation(
-                QString::fromStdString(owner_address_),
-                QString::fromStdString(hex_content));
-            json jr = safe_parse(convo_result.toStdString());
-            std::string cid = (jr.is_object() && jr.contains("convoId"))
-                              ? jr["convoId"].get<std::string>() : "";
-            if (!cid.empty()) {
-                impl_->config["owner_convo_id"] = cid;
-                impl_->save_config();
-            }
+            bool ok_r = modules().chat_module.newPrivateConversation(
+                owner_address_,
+                hex_content);
+            (void)ok_r;
         } else {
             modules().chat_module.sendMessage(
-                QString::fromStdString(owner_convo_id),
-                QString::fromStdString(hex_content));
+                owner_convo_id,
+                hex_content);
         }
     } catch (...) { /* owner unreachable; the event was already emitted */ }
 }
@@ -441,12 +434,12 @@ std::string AgentModuleImpl::storage_upload(const std::string& path, const std::
         // Route the upload through the platform storage_module.
         if (isContextReady()) {
             try {
-                LogosResult res = modules().storage_module.uploadUrl(
-                    QString::fromStdString(std::string("file://") + path),
+                StdLogosResult res = modules().storage_module.uploadUrl(
+                    std::string("file://") + path,
                     int64_t(0)
                 );
                 if (res.success) {
-                    std::string sid = res.getString().toStdString();
+                    std::string sid = res.value.is_string() ? res.value.get<std::string>() : "";
                     if (!sid.empty()) session_id = sid;
                 }
             } catch (...) { /* best effort */ }
@@ -479,15 +472,16 @@ std::string AgentModuleImpl::storage_download(const std::string& address, const 
         std::string status_str = "download_started";
         if (isContextReady()) {
             try {
-                LogosResult res = modules().storage_module.downloadToUrl(
-                    QString::fromStdString(address),
-                    QString::fromStdString(std::string("file://") + path),
-                    true
+                StdLogosResult res = modules().storage_module.downloadToUrl(
+                    address,
+                    std::string("file://") + path,
+                    true,
+                    int64_t(0)
                 );
                 if (res.success) {
                     status_str = "download_ok";
                 } else {
-                    status_str = "download_error: " + res.getError<QString>().toStdString();
+                    status_str = "download_error: " + res.error;
                 }
             } catch (const std::exception& ex) {
                 status_str = std::string("download_error: ") + ex.what();
@@ -516,9 +510,11 @@ std::string AgentModuleImpl::storage_list() {
         json platform_entries = json::array();
         if (isContextReady()) {
             try {
-                LogosResult res = modules().storage_module.manifests();
+                StdLogosResult res = modules().storage_module.manifests();
                 if (res.success) {
-                    platform_entries = safe_parse(res.getString().toStdString());
+                    platform_entries = res.value.is_string()
+                        ? safe_parse(res.value.get<std::string>())
+                        : res.value;
                 }
             } catch (...) {}
         }
@@ -609,24 +605,13 @@ std::string AgentModuleImpl::messaging_send(const std::string& recipient, const 
         std::string convo_id  = impl_->cfg(convo_key);
 
         if (convo_id.empty()) {
-            QString res = modules().chat_module.newPrivateConversation(
-                QString::fromStdString(recipient),
-                QString::fromStdString(hex_content));
-            // chat_module may return JSON {"convoId":"..."} or just "true" (async started).
-            // If JSON with convoId, cache it; otherwise mark as initiated (async).
-            json jr = safe_parse(res.toStdString());
-            if (jr.is_object() && jr.contains("convoId")) {
-                convo_id = jr["convoId"].get<std::string>();
-                if (!convo_id.empty()) {
-                    impl_->config[convo_key] = convo_id;
-                    impl_->save_config();
-                }
-            }
-            // If bool true, the message was dispatched asynchronously — treat as sent.
+            modules().chat_module.newPrivateConversation(
+                recipient,
+                hex_content);
         } else {
             modules().chat_module.sendMessage(
-                QString::fromStdString(convo_id),
-                QString::fromStdString(hex_content));
+                convo_id,
+                hex_content);
         }
 
         return ok({{"status", "sent"}, {"recipient", recipient}, {"convo_id", convo_id}});
@@ -646,7 +631,7 @@ std::string AgentModuleImpl::messaging_join(const std::string& group_id) {
         // We use delivery_module content topics as group transport.
         // group_id is treated as the content topic string.
 
-        modules().delivery_module.subscribe(QString::fromStdString(group_id));
+        modules().delivery_module.subscribe(group_id);
 
         // Record our membership.
         std::string groups_raw = impl_->cfg("joined_groups", "[]");
@@ -681,7 +666,7 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
         std::string group_id = make_id("group");
         std::string topic    = "/logos/agent-group/" + group_id + "/1/default/proto";
 
-        modules().delivery_module.subscribe(QString::fromStdString(topic));
+        modules().delivery_module.subscribe(topic);
 
         // Distribute the topic to each member over 1:1 chat.
         json invite = {
@@ -696,8 +681,8 @@ std::string AgentModuleImpl::messaging_create_group(const std::vector<std::strin
         for (const auto& member : members) {
             try {
                 modules().chat_module.newPrivateConversation(
-                    QString::fromStdString(member),
-                    QString::fromStdString(hex_invite));
+                    member,
+                    hex_invite);
             } catch (...) { /* continue sending to other members */ }
         }
 
@@ -1052,7 +1037,7 @@ std::string AgentModuleImpl::agent_discover(const std::string& topic) {
             : topic;
 
         // Subscribe to the discovery topic via delivery_module.
-        modules().delivery_module.subscribe(QString::fromStdString(effective_topic));
+        modules().delivery_module.subscribe(effective_topic);
 
         // Publish our own Agent Card to the topic so peers can discover us.
         std::string my_card_raw = agent_card();
@@ -1060,8 +1045,8 @@ std::string AgentModuleImpl::agent_discover(const std::string& topic) {
         if (my_card_j.contains("result")) {
             std::string card_str = my_card_j["result"].dump();
             modules().delivery_module.send(
-                QString::fromStdString(effective_topic),
-                QVariant(QString::fromStdString(card_str)));
+                effective_topic,
+                nlohmann::json(card_str));
         }
 
         // Store the topic so we can unsubscribe later.
@@ -1156,21 +1141,13 @@ std::string AgentModuleImpl::agent_task(const std::string& agent_address,
         std::string convo_id  = impl_->cfg(convo_key);
 
         if (convo_id.empty()) {
-            QString res = modules().chat_module.newPrivateConversation(
-                QString::fromStdString(agent_address),
-                QString::fromStdString(hex_payload));
-            json jr = safe_parse(res.toStdString());
-            if (jr.is_object() && jr.contains("convoId")) {
-                convo_id = jr["convoId"].get<std::string>();
-                if (!convo_id.empty()) {
-                    impl_->config[convo_key] = convo_id;
-                    impl_->save_config();
-                }
-            }
+            modules().chat_module.newPrivateConversation(
+                agent_address,
+                hex_payload);
         } else {
             modules().chat_module.sendMessage(
-                QString::fromStdString(convo_id),
-                QString::fromStdString(hex_payload));
+                convo_id,
+                hex_payload);
         }
 
         // Attempt autonomous payment if the lez_price > 0.
@@ -1235,7 +1212,7 @@ std::string AgentModuleImpl::agent_subscribe(const std::string& agent_address,
         // Map A2A SubscribeToTask: subscribe to a per-task delivery topic (LEARNING.md S9).
         // Topic pattern: /logos/agent-task/<task_id>/1/stream/proto
         std::string task_topic = "/logos/agent-task/" + task_id + "/1/stream/proto";
-        modules().delivery_module.subscribe(QString::fromStdString(task_topic));
+        modules().delivery_module.subscribe(task_topic);
 
         // Store subscription so we know which topics to clean up on cancel.
         std::string sub_key = "task_sub_" + task_id;
@@ -1274,15 +1251,15 @@ std::string AgentModuleImpl::agent_cancel(const std::string& agent_address,
         std::string convo_id  = impl_->cfg(convo_key);
         if (!convo_id.empty()) {
             modules().chat_module.sendMessage(
-                QString::fromStdString(convo_id),
-                QString::fromStdString(hex_payload));
+                convo_id,
+                hex_payload);
         }
 
         // Unsubscribe from the task topic.
         std::string sub_key   = "task_sub_" + task_id;
         std::string task_topic = impl_->cfg(sub_key);
         if (!task_topic.empty()) {
-            modules().delivery_module.unsubscribe(QString::fromStdString(task_topic));
+            modules().delivery_module.unsubscribe(task_topic);
             impl_->config.erase(sub_key);
             impl_->save_config();
         }
