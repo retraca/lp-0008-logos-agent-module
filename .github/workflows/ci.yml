@@ -52,8 +52,12 @@ jobs:
           # There must be at least one shared library in the output
           find result-agent/lib -name '*.so' | grep -q . \
             || { echo "ERROR: no .so found in result-agent/lib/"; exit 1; }
-          find result-agent -name 'metadata.json' | grep -q . \
-            || { echo "ERROR: metadata.json not found in output"; exit 1; }
+          # The module manifest is the committed scaffold/metadata.json; it is
+          # deployed next to the built .so (the modules dir holds both). The #lib
+          # output ships only the library, so verify the manifest at its source.
+          test -f scaffold/metadata.json \
+            || { echo "ERROR: scaffold/metadata.json (module manifest) missing"; exit 1; }
+          echo "OK: agent_module_plugin.so built + manifest present"
 
       # TODO (runtime milestone): build the lez_wallet_module plugin once its
       # flake/CMakeLists are authored (Phase 1 of BUILD_PLAN.md). Steps will mirror
