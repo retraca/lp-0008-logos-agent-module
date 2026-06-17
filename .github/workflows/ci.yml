@@ -72,7 +72,95 @@ jobs:
           path: result-agent/
 
   # ---------------------------------------------------------------------------
-  # Job 3: e2e — standalone LEZ sequencer + demo script
+  # Job 3: e2e-dev — fast dev-mode e2e (RISC0_DEV_MODE=1, runs on PUSH)
+  # Criterion #19: e2e integration tests run against a LEZ sequencer (standalone mode).
+  # Mirrors the e2e-sequencer boot pattern from LP-0002/LP-0003 exactly.
+  # Mock proofs (RISC0_DEV_MODE=1) keep this under CI time budget (~5 min).
+  # Full skill calls require logoscore (Logos platform binary, not buildable in stock CI);
+  # those are covered by the real-proof `e2e` job (workflow_dispatch) and demo-real.sh.
+  # ---------------------------------------------------------------------------
+  e2e-dev:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Clone LEZ (logos-execution-zone v0.1.2) as sibling lez-build
+        run: |
+          git clone --depth 1 --branch v0.1.2 \
+            https://github.com/logos-blockchain/logos-execution-zone.git \
+            "$GITHUB_WORKSPACE/../lez-build"
+
+      - name: Cache LEZ sequencer build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ../lez-build/target
+          key: ${{ runner.os }}-lez-v0.1.2-sequencer-dev
+
+      - name: Install logos-blockchain-circuits release v0.4.2
+        run: |
+          mkdir -p ~/.logos-blockchain-circuits
+          curl -sfL -o /tmp/circuits.tar.gz \
+            https://github.com/logos-blockchain/logos-blockchain-circuits/releases/download/v0.4.2/logos-blockchain-circuits-v0.4.2-linux-x86_64.tar.gz
+          tar -xzf /tmp/circuits.tar.gz -C ~/.logos-blockchain-circuits
+          inner=$(find ~/.logos-blockchain-circuits -maxdepth 1 -mindepth 1 -type d \
+            -name 'logos-blockchain-circuits-*' | head -1)
+          if [ -n "$inner" ]; then cp -r "$inner"/* ~/.logos-blockchain-circuits/; fi
+          ls ~/.logos-blockchain-circuits
+
+      - name: Build standalone sequencer
+        run: cargo build --release -p sequencer_service --features standalone
+        working-directory: ../lez-build
+
+      - name: Install r0vm (risc0 executor backend) v3.0.5
+        run: |
+          curl -sfL -o /tmp/crz.tgz \
+            https://github.com/risc0/risc0/releases/download/v3.0.5/cargo-risczero-x86_64-unknown-linux-gnu.tgz
+          tar -xzf /tmp/crz.tgz -C "$HOME/.cargo/bin" r0vm
+          chmod +x "$HOME/.cargo/bin/r0vm"
+          r0vm --version
+
+      - name: Download built agent_module plugins artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: agent-module-plugins
+          path: result-agent/
+
+      - name: Start LEZ standalone sequencer (RISC0_DEV_MODE=1 — mock proofs, fast)
+        run: |
+          mkdir -p /tmp/lez-seq-home
+          RISC0_DEV_MODE=1 RUST_LOG=info RUST_BACKTRACE=1 \
+            ../lez-build/target/release/sequencer_service \
+            .github/sequencer_config.json -p 3040 > /tmp/lez-seq.log 2>&1 &
+          echo "Waiting for sequencer to come up (up to 120s) ..."
+          for i in $(seq 1 60); do
+            curl -sf -m 2 -X POST http://127.0.0.1:3040 \
+              -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","method":"checkHealth","params":[],"id":1}' \
+              >/dev/null 2>&1 && echo "Sequencer ready after $((i*2))s." && exit 0
+            sleep 2
+          done
+          echo "ERROR: sequencer did not come up in 120s"; tail -80 /tmp/lez-seq.log; exit 1
+
+      - name: Run e2e-dev integration test
+        env:
+          RISC0_DEV_MODE: "1"
+          SEQUENCER: "http://127.0.0.1:3040"
+          MODULES_DIR: "${{ github.workspace }}/result-agent"
+        run: bash tests/e2e-dev.sh
+
+      - name: Sequencer log on failure
+        if: failure()
+        run: tail -100 /tmp/lez-seq.log
+
+  # ---------------------------------------------------------------------------
+  # Job 4: e2e — standalone LEZ sequencer + demo script
   # Mirrors the e2e-sequencer job from LP-0002/LP-0003.
   # RISC0_DEV_MODE=0 for this job (real proofs) as required by the spec.
   # ---------------------------------------------------------------------------
