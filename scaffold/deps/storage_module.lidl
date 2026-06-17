@@ -1,0 +1,40 @@
+module storage_module {
+  version "1.0.0"
+  description "Storage module"
+  category "protocol"
+  depends []
+
+  method init(cfg: tstr) -> bool
+  method start() -> bool
+  method stop() -> result
+  method destroy() -> result
+  method version() -> result
+  method dataDir() -> result
+  method peerId() -> result
+  method debug() -> result
+  method spr() -> result
+  method updateLogLevel(logLevel: tstr) -> result
+  method connect(peerId: tstr, peerAddresses: [tstr]) -> result
+  method uploadUrl(url: tstr, chunkSize: int) -> result
+  method uploadInit(filename: tstr, chunkSize: int) -> result
+  method uploadChunk(sessionId: tstr, chunk: bstr) -> result
+  method uploadFinalize(sessionId: tstr) -> result
+  method uploadCancel(sessionId: tstr) -> result
+  method downloadToUrl(cid: tstr, url: tstr, local: bool, chunkSize: int) -> result
+  method downloadChunks(cid: tstr, local: bool, chunkSize: int, filepath: tstr) -> result
+  method downloadCancel(sessionId: tstr) -> result
+  method exists(cid: tstr) -> result
+  method fetch(cid: tstr) -> result
+  method remove(cid: tstr) -> result
+  method space() -> result
+  method manifests() -> result
+  method downloadManifest(cid: tstr) -> result
+
+  event storageStart(success: bool, message: tstr)
+  event storageStop(success: bool, message: tstr)
+  event storageConnect(success: bool, message: tstr)
+  event storageUploadProgress(success: bool, sessionId: tstr, size: int)
+  event storageUploadDone(success: bool, sessionId: tstr, cid: tstr)
+  event storageDownloadProgress(success: bool, sessionId: tstr, bytes: int)
+  event storageDownloadDone(success: bool, sessionId: tstr, message: tstr)
+}

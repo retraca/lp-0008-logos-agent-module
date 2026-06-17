@@ -15,6 +15,11 @@
     "delivery_module",
     "storage_module"
   ],
+  "dependency_overrides": {
+    "storage_module": {
+      "file": "deps/storage_module.lidl"
+    }
+  },
   "interface_dependencies": [
     {
       "name": "lez_wallet",
