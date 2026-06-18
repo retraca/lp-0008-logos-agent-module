@@ -374,3 +374,20 @@ Integrated autonomous trace (RISC0_DEV_MODE=1 for the agent→wallet inter-modul
 
 Gate (#15) confirmed in same run: prices > 50 route to pending_approval ("spend exceeds autonomous threshold"), not executed.
 Gotcha: recipient must be a chain-valid account (npk/vpk generated on the live chain); stale keys from another keystore are rejected (tx submitted but not settled).
+
+## Storage round-trip — DONE (2026-06-18) — corrects earlier "no CID" note
+
+Earlier EVIDENCE_LOCAL §2 reported "no CID" because the agent's `storage_upload` skill was called WITHOUT first initialising the storage node. With `storage_module init`+`start` (a local Codex-compatible node, **no external peer required**), the full round-trip works single-node:
+
+```
+storage_module init {data-dir,...}      -> true
+storage_module start                    -> true
+storage_module peerId                   -> 16Uiu2HAmA48Z75yz62HgePGPfPKhXMSjmCkEAyNHGnRAWatNuj8L
+storage_module uploadInit vault-doc.txt -> session 0
+storage_module uploadChunk 0 <base64>   -> accepted
+storage_module uploadFinalize 0         -> CID zDvZRwzkxgfr9AvMSxA5pLQAKx5qvpbva3Q7ksMWccYokVv1nmU6
+storage_module exists <CID>             -> true
+storage_module downloadChunks <CID> 0   -> retrieved
+```
+
+Storage node logged: `Stored data … manifestCid=zDv*v1nmU6 treeCid=zDz*1wteEM blocks=1 datasetSize=76 filename="demo-vault.txt"`. The agent's `storage_list` skill then reports the stored file with its CID. This is the **personal file vault** use case end-to-end (upload → content address → exists → retrieve), and the third of the ≥3 use cases for F9 (with paid-skill-marketplace #8 and on-chain transfer).

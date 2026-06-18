@@ -51,10 +51,21 @@ cmd "agent_module within_threshold — policy: per_tx_limit = 50 LEZ"
 echo "   spend ≤ 50 → executes autonomously (shown in PART B, settled)"
 echo "   spend  > 50 → pending_approval ('spend exceeds autonomous threshold'), NOT executed"; sleep 1.5
 
-hdr "6. STORAGE skill — encrypt + upload → content address (file vault use case)"
-cmd "agent_module storage_upload <file> <label>"
-echo "test-$(date +%s)" > /tmp/vaultfile.txt
-"$LC" call agent_module storage_upload /tmp/vaultfile.txt vault-doc 2>/dev/null | python3 -c "import sys,json;r=json.load(sys.stdin);x=json.loads(r['result'])['result'];print('   -> upload session',x.get('session_id'),'status',x.get('status'),'(CID via task_update; full retrieval needs a libp2p peer — F9)')" 2>/dev/null; sleep 1.5
+hdr "6. STORAGE — file vault use case: upload → CID → exists → download (round-trip)"
+cmd "storage_module init + start  (local Codex-compatible node, no external peer)"
+DD="/Users/re.tracaicloud.com/lp0008-storage-$(date +%s)"
+"$LC" call storage_module init "{\"data-dir\":\"$DD\",\"log-level\":\"INFO\"}" >/dev/null 2>&1
+"$LC" call storage_module start >/dev/null 2>&1; sleep 3
+echo "   node peerId: $("$LC" call storage_module peerId 2>/dev/null | grep -o '"value":"[^"]*"' | sed 's/"value":"//;s/"//' | cut -c1-24)…"
+cmd "uploadInit → uploadChunk → uploadFinalize → CID"
+SID=$("$LC" call storage_module uploadInit vault-doc.txt 2>/dev/null | grep -o '"value":"[0-9]*"' | grep -o '[0-9]*')
+"$LC" call storage_module uploadChunk "$SID" "$(printf 'LP-0008 vault: agent-encrypted doc' | base64)" >/dev/null 2>&1
+CID=$("$LC" call storage_module uploadFinalize "$SID" 2>/dev/null | grep -o '"value":"[a-zA-Z0-9]*"' | sed 's/"value":"//;s/"//')
+echo -e "   ${G}CID: $CID${N}"
+cmd "exists(CID) + downloadChunks(CID)  — retrieval round-trip"
+EX=$("$LC" call storage_module exists "$CID" 2>/dev/null | grep -o '"value":true' | head -1)
+DL=$("$LC" call storage_module downloadChunks "$CID" 0 2>/dev/null | grep -o '"success":true' | head -1)
+echo "   exists -> ${EX:+true}   download -> ${DL:+retrieved}"; sleep 1.5
 
 hdr "7. MESSAGING — owner channel send (F4 owner interaction)"
 cmd "agent_module messaging_send <owner-topic> <msg>"
