@@ -12,10 +12,10 @@ GENESIS=Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV
 
 BOLD='\033[1m'; B='\033[1;34m'; G='\033[1;32m'; C='\033[0;36m'; Y='\033[1;33m'; DIM='\033[2m'; N='\033[0m'
 line(){ echo -e "${B}────────────────────────────────────────────────────────────────${N}"; }
-step(){ echo; line; echo -e "${B}  STEP $1 — $2${N}"; line; sleep 1.2; }
-say(){ echo -e "${DIM}   $1${N}"; sleep "${2:-1.8}"; }
-cmd(){ echo -e "${C}   \$ $1${N}"; sleep 1; }
-ok(){ echo -e "${G}   ✓ $1${N}"; sleep 1.6; }
+step(){ echo; echo; echo; line; echo -e "${B}  STEP $1 — $2${N}"; line; echo; sleep 2.4; }
+say(){ echo -e "${DIM}   $1${N}"; sleep "${2:-2.6}"; }
+cmd(){ echo; echo -e "${C}   \$ $1${N}"; sleep 1.4; }
+ok(){ echo; echo -e "${G}   ✓ $1${N}"; sleep 2.6; }
 
 clear
 echo
