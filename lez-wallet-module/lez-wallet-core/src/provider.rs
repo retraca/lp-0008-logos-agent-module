@@ -499,12 +499,14 @@ pub async fn send_to_foreign(
     let to_vpk = Secp256k1Point(vpk_bytes);
 
     let paths = AgentPaths::new(home_dir);
-    let from_id = public_account_id_from_wallet(&paths)?;
+    // Source from the agent's OWN shielded account (not a preconfigured/genesis account),
+    // so the autonomous payment debits the agent's own balance — it spends its own funds.
+    let (from_id, _from_npk, _from_vpk) = agent_private_keys_from_wallet(&paths)?;
     let wallet = open_wallet(&paths)?;
 
     let ntt = NativeTokenTransfer(&wallet);
     let (hash, _secret) = ntt
-        .send_shielded_transfer_to_outer_account(from_id, to_npk, to_vpk, amount)
+        .send_private_transfer_to_outer_account(from_id, to_npk, to_vpk, amount)
         .await?;
 
     Ok(hex::encode(hash))
