@@ -15,9 +15,11 @@ hdr(){ echo; echo -e "${B}══════════════════
 cmd(){ echo -e "${C}\$ $1${N}"; sleep 0.6; }
 
 hdr "LP-0008 — Autonomous AI Agent Module  (PART A: real proofs, RISC0_DEV_MODE=0)"
-cmd "ps — confirm RISC0_DEV_MODE=0 on sequencer + daemon"
-ps -E -o command= $(pgrep -f "sequencer_service|logoscore -D") 2>/dev/null | grep -oE "RISC0_DEV_MODE=[01]" | sort -u | sed 's/^/   /'
-echo "   (RISC0_DEV_MODE=0 → real zero-knowledge proofs)"; sleep 1
+cmd "ps — confirm RISC0_DEV_MODE on the sequencer + daemon"
+SEQ_PID=$(pgrep -f "sequencer_service" | head -1); DMN_PID=$(pgrep -f "logoscore -D" | head -1)
+echo "   sequencer: $(ps -E -o command= -p $SEQ_PID 2>/dev/null | grep -oE 'RISC0_DEV_MODE=[01]')"
+echo "   daemon:    $(ps -E -o command= -p $DMN_PID 2>/dev/null | grep -oE 'RISC0_DEV_MODE=[01]')"
+echo "   (RISC0_DEV_MODE=0 → real zero-knowledge proofs, not mocks)"; sleep 1
 
 hdr "1. MODULE LOADS inside Logos Core, alongside wallet/storage/messaging (F1)"
 cmd "logoscore status"
