@@ -361,3 +361,16 @@ pending_approvals: [
 | 3 | #8 Autonomous A2A | **PARTIAL** | discover+task lifecycle; settling payment proven in M6 EVIDENCE_LOCAL |
 | 4 | #14 Recovery | **DONE** | prop_10295434247958_0 + 13 tasks survived kill-9 restart |
 | 5 | #15 Owner-unreachable | **DONE** | 50 LEZ held as pending_approval, NOT executed, reason: "spend exceeds autonomous threshold" |
+
+## Item #8 — Autonomous A2A discover→task→PAY→SETTLE — COMPLETE (2026-06-18)
+
+Full 6-module stack reconstructed + loadable (agent_module + lez_wallet_module + storage/chat/delivery + capability), Qt 6.9.2, 0 crashed. Agent's wallet account funded via REAL RISC0 proof (RISC0_DEV_MODE=0): tx `df640b0f9cbbca4b46a5e81114a0596b6dc3acc5a79faceea79eca8f0cf4da1d`, genesis 6iArKUXx 10000→9900.
+
+Integrated autonomous trace (RISC0_DEV_MODE=1 for the agent→wallet inter-module call, which has a 20s async timeout < real-proof time; real-proof settlement proven separately by the funding tx above):
+1. meta_configure per_tx_limit=50 (autonomous threshold).
+2. Peer B = fresh chain-valid private account `Private/B3LsYHpoWcCnpDugunptXJVc9EKRdhWUTUTjbit8qzs2` (npk 35950035…, vpk 02a4c675…).
+3. agent_task(B Agent Card with skills[].lez_price=5, x-lez-identity npk/vpk) → agent resolves price 5 → within_threshold(5, limit 50)=true → AUTONOMOUS pay (no human approval) → wallet send_to → SETTLED.
+4. Settlement verified BOTH sides: payer 6iArKUXx 9900→**9895**; peer B 0→**5**.
+
+Gate (#15) confirmed in same run: prices > 50 route to pending_approval ("spend exceeds autonomous threshold"), not executed.
+Gotcha: recipient must be a chain-valid account (npk/vpk generated on the live chain); stale keys from another keystore are rejected (tx submitted but not settled).
