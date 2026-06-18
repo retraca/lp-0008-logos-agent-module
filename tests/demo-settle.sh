@@ -33,14 +33,16 @@ CARD="{\"name\":\"agent-B\",\"x-lez-identity\":{\"npk\":\"$BNPK\",\"vpk\":\"$BVP
 sleep 1
 
 hdr "4. TASK + AUTONOMOUS PAYMENT — price 5 ≤ 50 → no human in the loop"
-echo -e "${Y}   payer (agent public source) balance BEFORE:${N} $(bal "$DWHOME" "$GENESIS")"
-echo -e "${Y}   peer B balance BEFORE:${N}                  \"balance\":0  (fresh account)"
+AB_BEFORE=$("$LC" call lez_wallet_module balance 2>/dev/null | grep -o '"result":"[0-9]*"')
+echo -e "${Y}   AGENT's OWN shielded balance BEFORE:${N} $AB_BEFORE"
+echo -e "${Y}   peer B balance BEFORE:${N}              \"balance\":0  (fresh account)"
 run "agent_module agent_task <B-card> compute.run {...}" "\"\$LC\" call agent_module agent_task '$CARD' compute.run '{\"input\":\"x\"}' 2>/dev/null | python3 -c \"import sys,json;r=json.load(sys.stdin);x=json.loads(r['result'])['result'];print('   task',x['task_id'],'price',x['lez_price'],'status',x['status'])\""
-echo "   ...agent autonomously proves + submits the shielded transfer..."
+echo "   ...agent autonomously proves + submits the shielded transfer from ITS OWN account..."
 sleep 10
+"$LC" call lez_wallet_module sync_private >/dev/null 2>&1; sleep 1
 NSSA_WALLET_HOME_DIR="$BHOME" RISC0_DEV_MODE=1 "$W" account sync-private >/dev/null 2>&1
-echo -e "${G}   payer balance AFTER:  $(bal "$DWHOME" "$GENESIS")   (−5, settled)${N}"
-echo -e "${G}   peer B balance AFTER: $(bal "$BHOME" "$BID")   (+5, received — SETTLED)${N}"
+echo -e "${G}   AGENT's OWN balance AFTER:  $("$LC" call lez_wallet_module balance 2>/dev/null | grep -o '"result":"[0-9]*"')   (−5, paid from its own funds)${N}"
+echo -e "${G}   peer B balance AFTER:       $(bal "$BHOME" "$BID")   (+5, received — SETTLED)${N}"
 
 hdr "5. SPENDING GATE — above-threshold spend is HELD for owner approval"
 run "agent_module within_threshold check (price 80 > 50)" "echo '   price 80 > limit 50 → routed to pending_approval (reason: spend exceeds autonomous threshold)'; echo '   → NOT executed without approve_pending (human-in-the-loop)'"
