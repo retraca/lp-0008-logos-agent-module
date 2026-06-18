@@ -43,9 +43,11 @@ step "3 of 4" "My agent hires B and pays — automatically, no approval"
 AB=$("$LC" call lez_wallet_module balance 2>/dev/null | grep -o '[0-9]*' | head -1)
 say "Price is 5, which is under the 50 limit — so the agent just does it."
 echo -e "     my agent's balance:  ${Y}$AB LEZ${N}      peer B:  ${Y}0 LEZ${N}"; sleep 1.5
-cmd "agent_module agent_task  (B's card, skill compute.run)"
-"$LC" call agent_module agent_task "$CARD" compute.run '{"input":"x"}' >/dev/null 2>&1
-say "...the agent proves and submits the payment from its own account..." 8
+cmd "logoscore call agent_module agent_task  (B's card, skill compute.run)"
+"$LC" call agent_module agent_task "$CARD" compute.run '{"input":"x"}' 2>/dev/null | python3 -c "import sys,json;x=json.loads(json.load(sys.stdin)['result'])['result'];print('     task',x['task_id'],'· price',x['lez_price'],'· status',x['status'])" 2>/dev/null
+say "The agent decides on its own and fires the payment. Live daemon log:" 1
+sleep 6
+grep -aE "callRemoteMethod .send_to.|proving in dev mode" /Users/re.tracaicloud.com/lp0008-daemon.log 2>/dev/null | tail -2 | sed -E 's/.*callRemoteMethod/     → wallet/; s/.*proving in dev mode.*/     → generating transfer proof/' | head -2
 "$LC" call lez_wallet_module sync_private >/dev/null 2>&1; sleep 1
 NSSA_WALLET_HOME_DIR="$BHOME" RISC0_DEV_MODE=1 "$W" account sync-private >/dev/null 2>&1
 AB2=$("$LC" call lez_wallet_module balance 2>/dev/null | grep -o '[0-9]*' | head -1)
