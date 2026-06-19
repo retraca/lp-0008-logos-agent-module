@@ -15,11 +15,11 @@ DLOG=/Users/re.tracaicloud.com/lp0008-daemon.log; SLOG=/Users/re.tracaicloud.com
 GENESIS=Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV
 
 BOLD='\033[1m'; B='\033[1;36m'; G='\033[1;32m'; CY='\033[0;37m'; Y='\033[1;33m'; DIM='\033[2m'; N='\033[0m'
-hd(){ echo; echo; echo; echo -e "${B}▌ $1   ${DIM}$2${N}"; echo; echo; sleep 3; }
-why(){ echo -e "${Y}   $1${N}"; echo; echo; sleep 3.5; }      # one sharp line, then space
-run(){ echo -e "${BOLD}   \$ $1${N}"; sleep 2.5; }
-o(){ echo -e "${CY}     $1${N}"; sleep 0.6; }
-ck(){ echo; echo -e "${G}   ✓ $1${N}"; sleep 3.5; }
+hd(){ echo; echo; echo; echo -e "${B}▌ $1   ${DIM}$2${N}"; echo; echo; sleep 2.2; }
+why(){ echo -e "${Y}   $1${N}"; echo; sleep 2.6; }            # one sharp line, then space
+run(){ echo -e "   ${G}${BOLD}\$${N} ${BOLD}$1${N}"; sleep 1.8; }   # green $ prompt = live command
+o(){ echo -e "${DIM}       $1${N}"; sleep 0.4; }              # dim, indented = output
+ck(){ echo; echo -e "${G}   ✓ $1${N}"; sleep 2.6; }
 
 clear; echo
 echo -e "${BOLD}   LP-0008 — an autonomous AI agent on Logos${N}"
