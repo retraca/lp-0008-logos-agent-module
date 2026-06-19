@@ -11,11 +11,12 @@ scaffold/build/
 # Compiled programs / raw binaries
 *.bin
 
-# Video files — linked externally, not committed (keep repo clone fast)
+# Video and animation files — keep repo clone fast
 *.mp4
 *.avi
 *.mov
 *.mkv
+*.gif
 # asciinema .cast files are plain text and intentionally committed
 
 # macOS

@@ -26,7 +26,8 @@ docs/
   SECURITY_MODEL.md
   SKILL_INTERFACE.md
   VIDEO_NARRATION.md
-  lp0008-demo.cast          # asciinema recording (plain text, 2.2 KB — commit it)
+  lp0008-full-a.cast        # asciinema recording — full A2A flow (plain text — committed)
+  lp0008-settle-demo.cast   # asciinema recording — settle flow (plain text — committed)
   REPO_MANIFEST.md          # this file
 scaffold/
   CMakeLists.txt
@@ -57,7 +58,7 @@ tests/
 | `scaffold/build/` | CMake build directory — compiled artefacts, auto-generated, never committed |
 | `scaffold/libagent_module_plugin.so` | Compiled plugin at scaffold root — gitignored via `*.so` rule |
 | `scaffold/build/libagent_module_plugin.so` | Same, inside build dir — doubly excluded |
-| `docs/lp0008-demo.mp4` | 1.2 MB binary video — gitignored via `*.mp4` rule; link externally in submission write-up |
+| `docs/lp0008-full-demo.mp4` + `docs/lp0008-settle-demo.mp4` | Binary videos — force-added via `git add -f`; keep in repo for evaluator access |
 | `scaffold/build/CMakeFiles/` | CMake internal directory |
 | `scaffold/build/CMakeCache.txt` | CMake cache |
 | `scaffold/build/build.ninja` | Ninja build file |
@@ -99,7 +100,7 @@ git branch -M main
 git add LICENSE .gitignore README.md ARCHITECTURE.md BUILD_PLAN.md LEARNING.md SUBMISSION.md
 git add .github/
 git add docs/A2A_BINDING.md docs/SECURITY_MODEL.md docs/SKILL_INTERFACE.md \
-        docs/VIDEO_NARRATION.md docs/lp0008-demo.cast docs/REPO_MANIFEST.md
+        docs/VIDEO_NARRATION.md docs/lp0008-full-a.cast docs/lp0008-settle-demo.cast docs/REPO_MANIFEST.md
 git add scaffold/CMakeLists.txt scaffold/flake.nix scaffold/metadata.json scaffold/README.md
 git add scaffold/interfaces/ scaffold/src/
 git add tests/
@@ -140,4 +141,4 @@ retraca/lp-0008-logos-agent-module
 - [ ] Confirm the repo is public: `gh repo view retraca/logos-lp0008-agent`
 - [ ] Verify `.so` and `build/` are absent from the repo: `gh api repos/retraca/logos-lp0008-agent/git/trees/main?recursive=1 | jq '.tree[].path'`
 - [ ] Add the repo URL to the Lambda Prize submission form
-- [ ] Upload `docs/lp0008-demo.mp4` to a video host (YouTube unlisted or Loom) and link it in `SUBMISSION.md` before final submission
+- [ ] Add voiceover narration to `docs/lp0008-full-demo.mp4` and `docs/lp0008-settle-demo.mp4` before final submission

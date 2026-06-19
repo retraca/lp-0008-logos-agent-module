@@ -128,7 +128,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | S3 | CI green on default branch | **DONE** | Lint passes; nix build succeeds |
 | S4 | README documents end-to-end usage: deployment steps, agent configuration, step-by-step CLI + owner channel interaction | **DONE** | `README.md`; `SUBMISSION.md` build instructions below |
 | S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `tests/demo-real.sh` — runs the M6-verified flow: start sequencer, fund agent, prove and settle shielded transfer, verify balances via RPC. `RISC0_DEV_MODE=0` confirmed via `ps eww` in script. |
-| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PARTIAL** | `docs/lp0008-demo.mp4` — silent real-proof screencast; terminal output + `RISC0_DEV_MODE=0` visible. Builder voiceover narration is pending. |
+| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PARTIAL** | `docs/lp0008-full-demo.mp4` (full A2A flow) + `docs/lp0008-settle-demo.mp4` (settle flow) — silent real-proof screencasts; terminal output + `RISC0_DEV_MODE=0` visible. Builder voiceover narration is pending. |
 
 ### Submission Requirements
 
@@ -136,7 +136,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 |---|---|---|---|
 | SR1 | Public repository, MIT or Apache-2.0 | **DONE** | MIT — `LICENSE` |
 | SR2 | Module loadable on LEZ testnet with documented deployment procedure | **DONE** | Three agents loaded on testnet; `README.md` quick-start + build instructions |
-| SR3 | End-to-end demo video(s) for at least 3 use cases, builder narrates | **PARTIAL** | Video exists (`docs/lp0008-demo.mp4`), silent — narration pending. `docs/VIDEO_NARRATION.md` has the narration script. |
+| SR3 | End-to-end demo video(s) for at least 3 use cases, builder narrates | **PARTIAL** | Videos: `docs/lp0008-full-demo.mp4` (full A2A flow) + `docs/lp0008-settle-demo.mp4` (settle flow), both silent — narration pending. `docs/VIDEO_NARRATION.md` has the narration script. |
 | SR4 | Reproducible deployment steps + evidence for 3 testnet agents (one per skill category) | **DONE** | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging accounts; reproduce commands included |
 | SR5 | Write-up: module architecture, skill interface design, spending threshold, A2A coordination, security model, known limitations, integration instructions | **DONE** | `ARCHITECTURE.md`, `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`; limitations in this file below |
 
@@ -176,7 +176,7 @@ All five PARTIAL items have the same two root causes:
 2. **Storage and Messaging skill settlement** — libp2p peer network required; single-node
    deployment demonstrates funding + addressability but not full skill round-trip.
 
-3. **Video narration** — pending builder voiceover on `docs/lp0008-demo.mp4`.
+3. **Video narration** — pending builder voiceover on `docs/lp0008-full-demo.mp4` and `docs/lp0008-settle-demo.mp4`.
 
 4. **Real-proof e2e in automatic CI** — RISC0 real proving is ~2 min per transfer; it runs as a
    manual `workflow_dispatch` job rather than on every push. Lint + nix build are automatic.
@@ -299,8 +299,10 @@ docs/
   A2A_BINDING.md             A2A transport binding spec
   SECURITY_MODEL.md          Security model: autonomous vs. owner-gated actions
   SKILL_INTERFACE.md         Third-party skill interface spec
-  lp0008-demo.mp4            Real-proof demo video (silent; narration pending)
-  lp0008-demo.cast           asciinema recording
+  lp0008-full-demo.mp4       Real-proof demo video — full A2A flow (silent; narration pending)
+  lp0008-settle-demo.mp4    Real-proof demo video — settle flow (silent; narration pending)
+  lp0008-full-a.cast         asciinema recording — full A2A flow
+  lp0008-settle-demo.cast    asciinema recording — settle flow
   VIDEO_NARRATION.md         Narration script (pending voiceover)
 tests/
   demo-real.sh               Reproducible real-proof e2e demo

@@ -64,7 +64,7 @@ All evidence files are in `docs/`.
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
 | Real-proof e2e demo script | Yes | `tests/demo-real.sh` |
-| Demo video (silent, `RISC0_DEV_MODE=0` visible) | Partial | `docs/lp0008-demo.mp4` — narration pending |
+| Demo video (silent, `RISC0_DEV_MODE=0` visible) | Partial | `docs/lp0008-full-demo.mp4` (full A2A flow) + `docs/lp0008-settle-demo.mp4` (settle flow) — narration pending |
 
 **Honest limitations:**
 
@@ -76,7 +76,7 @@ All evidence files are in `docs/`.
   funded and addressable on testnet, but their storage/messaging skill round-trip is not
   demonstrated on single-node infra — an infra dependency, not a code gap.
 - **Video narration:** the spec requires the builder narrates the recording. The current
-  `docs/lp0008-demo.mp4` is a silent real-proof screencast; voiceover is pending.
+  `docs/lp0008-full-demo.mp4` and `docs/lp0008-settle-demo.mp4` are silent real-proof screencasts; voiceover is pending.
 
 ---
 
@@ -205,7 +205,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |
 | Reproducible demo script, `RISC0_DEV_MODE=0` | DONE | `tests/demo-real.sh` |
-| Recorded video demo with builder narration | PARTIAL | `docs/lp0008-demo.mp4` silent real-proof recording; voiceover pending |
+| Recorded video demo with builder narration | PARTIAL | `docs/lp0008-full-demo.mp4` + `docs/lp0008-settle-demo.mp4` silent real-proof recordings; voiceover pending |
 
 ---
 
