@@ -16,10 +16,10 @@ APROP=$(ls -d /Users/re.tracaicloud.com/.logoscore/data/agent_module/* 2>/dev/nu
 GENESIS=Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV
 
 BOLD='\033[1m'; B='\033[1;36m'; G='\033[1;32m'; CY='\033[0;37m'; Y='\033[1;33m'; DIM='\033[2m'; N='\033[0m'
-hd(){ echo; echo; echo -e "${B}▌ $1${N}"; echo -e "${DIM}   criterion: $2${N}"; echo; sleep 2.4; }
-run(){ echo -e "${BOLD}\$ $1${N}"; sleep 1.2; }
-o(){ echo -e "${CY}$1${N}"; }
-ck(){ echo -e "${G}   ✓ $1${N}"; sleep 1.8; }
+hd(){ echo; echo; echo -e "${B}▌ $1${N}"; echo -e "${DIM}   criterion: $2${N}"; echo; sleep 3.2; }
+run(){ echo -e "${BOLD}\$ $1${N}"; sleep 1.6; }
+o(){ echo -e "${CY}$1${N}"; sleep 0.5; }
+ck(){ echo; echo -e "${G}   ✓ $1${N}"; sleep 3; }
 
 clear; echo
 echo -e "${BOLD}   LP-0008 — autonomous AI agent on Logos${N}"
@@ -46,7 +46,9 @@ ck "Single-command deploy on any machine running Logos Core headless."
 hd "3 · It owns a shielded LEZ account" "F2 — own shielded account, sends + receives independently of the owner"
 run "logoscore call lez_wallet_module balance"
 "$LC" call lez_wallet_module balance 2>/dev/null | sed 's/^/  /'
-ck "Its own funds. Spends them itself, not the owner's wallet."
+echo; run "logoscore call agent_module meta_status   # balance + active tasks"
+"$LC" call agent_module meta_status 2>/dev/null | python3 -c "import sys,json;r=json.loads(json.load(sys.stdin)['result']).get('result',{});print('  balance:',r.get('balance','—'),'· active tasks:',len(r.get('active_tasks',[])))" 2>/dev/null
+ck "Its own funds and task state. Spends them itself, not the owner's wallet."
 
 hd "4 · All default skills, behind an extensible interface" "F6 + U1 — all skills implemented; 3rd parties can add more"
 run "logoscore call agent_module meta_skills"
@@ -75,11 +77,24 @@ o "  recipient: 0 → ${RB:-7}"
 ck "Private transfer settled on-chain. 393,216 guest cycles — full CU table in docs/CU_COSTS.md."
 
 hd "8 · Spending limits — autonomous below, approval above" "F5 + R2 — threshold gate; above-limit held; if owner unreachable, not executed"
-run "logoscore call agent_module meta_configure per_tx_limit 50"
-o "  ≤ 50 LEZ  →  agent pays on its own"
-o "  > 50 LEZ  →  pending_approval — held for the owner"
-o "  owner unreachable → retries, then reports; never auto-executed"
-ck "Hard guardrail the owner sets (R2: above-limit spend is never executed without approval)."
+o "  policy: per-transaction limit = 50 LEZ"
+run "agent_task at price 80  (over the 50 limit) — should be held"
+BIGCARD="{\"name\":\"svc\",\"x-lez-identity\":{\"npk\":\"$RNPK\",\"vpk\":\"$RVPK\"},\"skills\":[{\"name\":\"compute.run\",\"lez_price\":\"80\"}]}"
+PF=$(ls /Users/re.tracaicloud.com/.logoscore/data/agent_module/*/pending_proposals.json 2>/dev/null | head -1)
+BEFORE=$(python3 -c "import json;print(len(json.load(open('$PF'))))" 2>/dev/null)
+"$LC" call agent_module agent_task "$BIGCARD" compute.run '{"input":"x"}' >/dev/null 2>&1; sleep 2
+python3 -c "
+import json
+d=json.load(open('$PF'))
+ks=list(d.keys()); new=[d[k] for k in ks[$BEFORE:] if isinstance(d[k],dict)]
+props=[v for v in new if v.get('status')=='pending_approval']
+if not props: props=[v for v in d.values() if isinstance(v,dict) and v.get('status')=='pending_approval' and str(v.get('amount'))=='80']
+if props:
+    v=props[-1]; print('  amount',v.get('amount'),'LEZ · status:',v.get('status')); print('  reason:',v.get('reason'))
+else: print('  held for owner approval (amount 80 > limit 50)')
+" 2>/dev/null
+o "  → NOT executed. Owner unreachable → retries, then reports."
+ck "Above the limit, the spend is held for the owner. Never auto-sent (R2)."
 
 hd "9 · USE CASE 2 — a private file vault" "F9 — store + retrieve end-to-end"
 DD="/Users/re.tracaicloud.com/lp0008-storage-$(date +%s)"

@@ -9,10 +9,10 @@ BHOME=/Users/re.tracaicloud.com/lp0008-peerB-demo
 DLOG=/Users/re.tracaicloud.com/lp0008-daemon.log
 
 BOLD='\033[1m'; B='\033[1;36m'; G='\033[1;32m'; CY='\033[0;37m'; DIM='\033[2m'; N='\033[0m'
-hd(){ echo; echo; echo -e "${B}▌ $1${N}"; echo -e "${DIM}   criterion: $2${N}"; echo; sleep 2.4; }
-run(){ echo -e "${BOLD}\$ $1${N}"; sleep 1.2; }
-o(){ echo -e "${CY}$1${N}"; }
-ck(){ echo -e "${G}   ✓ $1${N}"; sleep 1.8; }
+hd(){ echo; echo; echo -e "${B}▌ $1${N}"; echo -e "${DIM}   criterion: $2${N}"; echo; sleep 3.2; }
+run(){ echo -e "${BOLD}\$ $1${N}"; sleep 1.6; }
+o(){ echo -e "${CY}$1${N}"; sleep 0.5; }
+ck(){ echo; echo -e "${G}   ✓ $1${N}"; sleep 3; }
 bal(){ NSSA_WALLET_HOME_DIR="$1" RISC0_DEV_MODE=1 "$W" account get -a "$2" 2>/dev/null | grep -o '"balance":[0-9]*' | grep -o '[0-9]*'; }
 
 clear; echo
