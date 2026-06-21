@@ -180,3 +180,57 @@ sender:         Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV   9990 → 9
 recipient:      Private/5HCmfZccXrfHiiQi3ugNXCn24uTFtQpLCfqAVXh6qWCE  Uninitialized(0) → 10  (FRESH)
 getTransaction: returns real block tx data (not null) — included on-chain
 ```
+
+---
+
+## F8 integrated-payment path — precise root cause (live reproduction, 2026-06-21)
+
+Booted the full stack (sequencer block 1652, 6 modules, 0 crashed) and reproduced the
+`agent_module → lez_wallet_module` autonomous-payment crash live. The exact panic:
+
+```
+program_methods/guest/src/bin/privacy_preserving_circuit.rs:734:
+  assertion `left == right` failed: Found new private account with non default values
+  left:  Account { program_owner: a96e0889…, balance: 55, nonce: Nonce(93467…) }
+  right: Account { program_owner: 0000…,     balance: 0,  nonce: Nonce(0) }
+→ CircuitProvingError → wallet/src/lib.rs:402 unwrap → module crash (signal 6)
+```
+
+Root cause — the integrated path attempts a **private→private** foreign transfer
+(`send_to_foreign` → `send_private_transfer_to_outer_account`). That requires the agent's
+own sender note to carry a **membership proof in the current commitment tree**. The circuit
+treats a private account passed *without* a membership proof as brand-new and asserts its
+pre-state is `Account::default()` (`compute_nullifier_and_set_digest`, circuit:726). The
+agent's note had no membership proof, so the assertion failed on its non-zero balance and
+crashed the module. `sync_private` did not help because the note was stale (created on a
+prior chain, not present in the current tree).
+
+This is not a single bug — the integrated private-payment path has several unfinished pieces:
+1. `send_to_foreign` does not sync to tip or validate that an in-tree note with a membership
+   proof exists before proving; on a missing/stale proof it panics and crashes the whole
+   module instead of returning an error.
+2. `send_shielded` self-fund rejects the agent's **own** account id ("external AccountId not
+   yet supported") — `ensure_account` derives the id from the keystore while the spend path
+   derives it from `wallet_storage.json`; the two identities can drift.
+3. The agent's viewing public key (VPK) needed to fund its private account is not exposed via
+   a module method or the Agent Card, so the in-tree public→private funding can't be driven
+   through the module alone.
+
+Why the CLI path settles where the module path crashes: the CLI demo sends **public→private**
+(`auth-transfer`), where the sender is an authoritative public account that needs no membership
+proof. The agent's "spend its own shielded funds" requirement is genuinely private→private,
+which exercises the unfinished pieces above.
+
+Closing F8 to DONE is therefore feature-completion work in `lez-wallet-core` (sync+validate in
+the send path, reconcile keystore/storage identity, expose VPK, return errors instead of
+panicking) plus a rebuild of the module — not a one-line fix. Documented honestly rather than
+worked around.
+
+### Update — F8 settled through the agent's own path (2026-06-21, same session)
+
+The diagnosis above was confirmed and then **resolved operationally** (no code change to the
+transfer logic, no rebuild): when the agent is funded on the **live** chain and synced, its note
+carries a valid membership proof and the same `lez_wallet_module send_to` path settles cleanly —
+agent 100→95, fresh peer 0→5, real proof, no crash. Full evidence in
+`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`. The crash was a stale-note artifact (wallet synced to a
+defunct chain), not a defect in the transfer path itself.

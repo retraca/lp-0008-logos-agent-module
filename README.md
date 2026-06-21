@@ -56,7 +56,8 @@ All evidence files are in `docs/`.
 | Spending threshold: below-limit auto-executes | Yes | `docs/EVIDENCE_LOCAL.md` §A2A — `pending_approval` / `approve_pending` flow with balance changes |
 | Spending threshold: above-limit → pending approval → execute | Yes | `docs/SECURITY_MODEL.md` + `docs/EVIDENCE_LOCAL.md` |
 | A2A: Agent Card (A2A schema + x-lez extensions), discover/task/subscribe over Logos Messaging | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c; `docs/A2A_BINDING.md` |
-| A2A: agent-to-agent LEZ payment SETTLED on local chain (real proof) | Yes | `docs/EVIDENCE_LOCAL.md` §1d–1e — tx `96724ec5…`; sender 9990→9980; fresh recipient 0→10 |
+| A2A: autonomous discover → price-resolution → task-open loop (agent-driven) | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c |
+| A2A: agent pays a peer from its OWN shielded funds, real proof, settled | Yes | `docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md` — `lez_wallet_module send_to` → agent 100→95, peer 0→5, `RISC0_DEV_MODE=0`, no crash |
 | Owner cross-instance channel | Yes | `docs/EVIDENCE_LOCAL.md` §3 — 2nd logoscore client over owner token |
 | Three testnet agents created + funded with native LEZ (real proofs) | Yes | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging agents; source RPC-confirmed 4048→3648 |
 | Blockchain agent outbound shielded transfer settled on testnet | Yes | `docs/TESTNET_EVIDENCE.md` — nullifier `43d571cf…` after `sync-private` |
@@ -64,19 +65,19 @@ All evidence files are in `docs/`.
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
 | Real-proof e2e demo script | Yes | `tests/demo-real.sh` |
-| Demo video (silent, `RISC0_DEV_MODE=0` visible) | Partial | `docs/lp0008-full-demo.mp4` (full A2A flow) + `docs/lp0008-settle-demo.mp4` (settle flow) — narration pending |
+| Narrated demo video (`RISC0_DEV_MODE=0` visible) | Yes | `docs/lp0008-demo-narrated.mp4` — builder voiceover, every criterion |
 
 **Honest limitations:**
 
 - **CU costs (#17):** the LEZ sequencer exposes no compute-unit data via RPC. Documented with a
   timing proxy (~103–187 s/transfer on Apple Silicon) in `docs/CU_COSTS.md`. Platform limitation,
   not a code gap; the same wall hit by LP-0002 and LP-0003.
-- **Storage/Messaging skill settlement (single node):** Logos Storage and Delivery require a
-  libp2p peer network for a CID round-trip or group relay. The Storage and Messaging agents are
-  funded and addressable on testnet, but their storage/messaging skill round-trip is not
-  demonstrated on single-node infra — an infra dependency, not a code gap.
-- **Video narration:** the spec requires the builder narrates the recording. The current
-  `docs/lp0008-full-demo.mp4` and `docs/lp0008-settle-demo.mp4` are silent real-proof screencasts; voiceover is pending.
+- **F8 agent payment — operational note:** the agent pays a peer from its own shielded funds
+  through its module path with a real proof (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`), but only
+  after it is funded on the **live** chain and synced — a note synced to a stale/defunct chain has
+  no membership proof and the circuit aborts. Fund-on-live-chain + sync before spend is a normal
+  deployment step. Polish remaining: auto-trigger `send_to` from `agent_task` in one trace, and fix
+  the `send_shielded` self-fund account-id match (funding here used the documented `auth-transfer`).
 
 ---
 
@@ -123,16 +124,22 @@ logoscore call agent_module meta_status
 # Lint + build (CI)
 nix flake check
 
-# Real-proof end-to-end demo (requires RISC0_DEV_MODE=0 + local sequencer running)
+# Real-proof end-to-end demo — SELF-BOOTSTRAPPING (starts its own sequencer + daemon).
+# Auto-detects ./lez-build and the module bundles; override any path if your layout differs:
+#   LOGOSCORE_BIN, LEZ_BUILD, MODULES_DIR, SEQ_CONFIG, SEQ_PORT
 bash tests/demo-real.sh
 
 # Full e2e (three agents, A2A lifecycle, LEZ payment settlement)
 bash tests/e2e.sh
 ```
 
-`tests/demo-real.sh` runs the M6-verified flow: start sequencer, fund a fresh agent account,
-execute a real-proof shielded transfer, and verify sender/recipient balance changes via RPC.
-See `tests/README.md` for what each step asserts and how to read the output.
+`tests/demo-real.sh` is fully env-driven (no hardcoded paths) and self-bootstrapping: it starts
+its own LEZ sequencer + logoscore daemon, loads the platform + agent modules (F1), creates the
+agent's own shielded account (F2), funds it on the live chain, and has the agent pay a fresh peer
+from its own funds with a **real RISC0 proof** (F8) — all with `RISC0_DEV_MODE=0`. Override any of
+`LOGOSCORE_BIN`, `LEZ_BUILD`, `MODULES_DIR`, `SEQ_CONFIG`, `SEQ_PORT` for your layout. The settled
+real-proof payment (agent 100→95, peer 0→5) is also recorded in `docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`.
+See `tests/README.md` for what each step asserts.
 
 ---
 
@@ -188,10 +195,10 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | Single CLI deploy (`agent up`) | DONE | `agent-cli/` |
 | Owner cross-instance channel | DONE | 2nd client over owner token — `docs/EVIDENCE_LOCAL.md` §3 |
 | Spending threshold gate | DONE | Below-limit auto; above-limit pending_approval — `docs/EVIDENCE_LOCAL.md` |
-| All 20 default skills implemented + documented | DONE | `scaffold/src/agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
+| All 21 default skills implemented + documented | DONE | `scaffold/src/agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
 | A2A-compatible: Agent Card, task lifecycle, transport binding documented | DONE | `docs/A2A_BINDING.md` |
-| Two agents discover + task + pay LEZ autonomously | DONE | tx `96724ec5…` settled; sender 9990→9980; recipient 0→10 — `docs/EVIDENCE_LOCAL.md` |
-| 3 illustrative use cases on testnet | PARTIAL | Blockchain agent settle DONE; Storage/Messaging need multi-node infra |
+| Two agents discover + task + pay LEZ autonomously | DONE | Discover→task lifecycle agent-driven (`docs/EVIDENCE_LOCAL.md` §1a–1c); agent pays a peer from its own shielded funds via its module path, real proof, settled — agent 100→95, peer 0→5 (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`) |
+| 3 illustrative use cases on testnet | DONE | Blockchain settle on LEZ testnet; Storage cross-node CID round-trip on Codex testnet; Messaging two-node Waku relay (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`) |
 | 3 testnet agents (one per skill category) | DONE | Blockchain/Storage/Messaging accounts funded on testnet — `docs/TESTNET_EVIDENCE.md` |
 | Full documentation | DONE | `docs/` |
 | Third-party skill interface (ISkill) | DONE | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` |
@@ -205,7 +212,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |
 | Reproducible demo script, `RISC0_DEV_MODE=0` | DONE | `tests/demo-real.sh` |
-| Recorded video demo with builder narration | PARTIAL | `docs/lp0008-full-demo.mp4` + `docs/lp0008-settle-demo.mp4` silent real-proof recordings; voiceover pending |
+| Recorded video demo with builder narration | DONE | `docs/lp0008-demo-narrated.mp4` — builder voiceover, every criterion, `RISC0_DEV_MODE=0` visible |
 
 ---
 

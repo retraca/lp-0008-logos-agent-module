@@ -1,6 +1,8 @@
 # LP-0008 demo — narration script
 
-Read this over `docs/lp0008-full-demo.mp4`. The screen shows real commands + output,
+> Status: recorded. Final narrated cut is `docs/lp0008-demo-narrated.mp4` (5:24, 1920×1080).
+
+Read over `docs/lp0008-full-demo.mp4`. The screen shows real commands + output,
 each header naming the success criterion it proves. Your voice carries the meaning.
 Blocks are numbered to match the on-screen headers 1:1. Short lines. Pause between
 sections if you want.
@@ -74,22 +76,27 @@ tests in CI, a green build, and a README that walks the whole flow."
 "Now use case three. A second agent publishes a card: it can run a job, for five
 LEZ."
 
-**15 · The agent hires and pays it (F8)**
-"My agent finds the peer, sends the job, and because five is under the limit, it
-pays. The wallet fires, the proof runs. My agent's balance drops by five, the
-peer's goes up by five. A real agent-to-agent payment, settled, no human, no
-processor."
+**15 · The agent discovers, prices, and opens the task; the payment settles with a real proof (F8 — partial)**
+"My agent finds the peer, reads the price from its card, and because five is under
+the limit, opens the task on its own. No human in that loop. The payment of the
+resolved price then settles with a real zero-knowledge proof. Honest note: that
+final settling transfer runs through the wallet's transfer primitive, not yet
+through the agent module's own integrated wallet path, which still panics on a
+freshly reset chain. So the autonomous discover-price-task loop is real, and the
+payment is real, but the last integrated hop is the one piece still open."
 
 **16 · Over the limit, it asks first (F5)**
 "And the guardrail again: at eighty, over the limit, it would not pay. It holds
 the request for the owner."
 
 **Criteria checklist**
-"Every success criterion, met: it loads beside the platform modules, owns its
-account, deploys in one command, controls spending, ships every skill, speaks
-A2A, pays other agents, runs three use cases end to end, deploys on testnet,
+"Where it stands: it loads beside the platform modules, owns its account, deploys
+in one command, controls spending, ships every skill, speaks A2A, runs three use
+cases end to end on the live Logos testnets, deploys three agents on testnet,
 recovers from restarts, isolates failures, documents its costs, and ships the
-docs, app, CI and README. That's LP-0008. Thanks for watching."
+docs, app, CI and README. The one piece still open is the agent module's own
+integrated wallet hop for autonomous payment, which I've been straight about.
+That's LP-0008. Thanks for watching."
 
 ---
 

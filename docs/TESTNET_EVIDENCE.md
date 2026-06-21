@@ -72,10 +72,9 @@ The agent both **received** (funding, above) and **sent** (here) tokens independ
 
 ### Storage / Messaging agents
 
-Funded and addressable on testnet (accounts above). Their storage/messaging skills depend on a Logos Storage / Delivery **peer network**; on a single local/bare node there are no peers (see `EVIDENCE_LOCAL.md`), so a CID / group-relay round-trip needs a multi-node deployment — an infra dependency, not a code gap.
+Funded and addressable on testnet (accounts above). Their full distributed round-trips are demonstrated on the live peer networks: a cross-node CID round-trip on the Logos Storage (Codex) testnet (`STORAGE_TESTNET_EVIDENCE.md`) and a two-node Waku relay for Logos Messaging (`MESSAGING_TESTNET_EVIDENCE.md`).
 
 ### Note on testnet operational fragility (observed)
 
 - `account sync-private` scans from genesis to tip (~56k blocks) and the sequencer can time out on long ranges; sync persists per block, so it is re-run/looped until it reaches tip.
 - The wallet's transaction poll window (`seq_tx_poll_max_blocks=5`) can report "Transaction not found in preconfigured amount of blocks" even when the tx later settles — confirmed here for the storage funding (`dbc40069…`), whose settlement is proven by the source account's subsequent nonce (37) and balance (3648).
-</content>
