@@ -2,7 +2,7 @@
   description = "agent_module — LP-0008 autonomous AI agent Logos Core Qt plugin";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/e9f00bd893984bc8ce46c895c3bf7cac95331127";  # Qt 6.9.2 — logoscore rejects 6.11 ("incompatible Qt library")
     logos-module-builder = {
       url = "github:logos-co/logos-module-builder";
       inputs.nixpkgs.follows = "nixpkgs";

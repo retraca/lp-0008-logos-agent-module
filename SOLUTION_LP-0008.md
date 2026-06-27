@@ -48,9 +48,10 @@ Key decisions and what did not work:
 - **Spending fail-safe (R2).** An over-limit spend is held, never executed. We retry the owner
   notification a few times and record the result on the proposal, so a failure to reach the
   owner is reported rather than silently dropped.
-- **Qt version.** A plugin built against the default nixpkgs Qt 6.11 will not load in logoscore
-  (Qt 6.9.2): "incompatible Qt library." Building with `--override-input nixpkgs <rev-with-6.9.2>`
-  fixes it.
+- **Qt version.** logoscore loads Qt 6.9.2 plugins and rejects 6.11 ("incompatible Qt library").
+  The scaffold `flake.nix` pins `nixpkgs` to the 6.9.2 rev, so the default `nix build ./scaffold#lib`
+  produces a loadable module with no override flag. Verified: a clean build links `qtbase-6.9.2` and
+  all five modules load (`Module loaded: agent_module`).
 - **CLI arg typing.** logoscore's `call` types a bare numeric arg as a JSON number, but the
   module's config values are strings, so `agent up` sent numbers and the spending limit never
   set. Fixed in `agent-cli` by sending numeric config values as JSON strings.
