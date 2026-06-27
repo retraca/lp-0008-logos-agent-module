@@ -51,16 +51,16 @@ All evidence files are in `docs/`.
 | Capability | Verified | Key evidence |
 |---|---|---|
 | 6/6 Logos Core modules load, 0 crashed | Yes | `docs/EVIDENCE_LOCAL.md` — agent + lez_wallet + storage + chat + delivery + capability |
-| Agent has its own shielded LEZ account | Yes | `docs/TESTNET_EVIDENCE.md` — Blockchain agent `Private/a48YnmT2…` funded, nonce consumed on-chain |
-| Agent can send AND receive tokens (real proofs, `RISC0_DEV_MODE=0`) | Yes | `docs/TESTNET_EVIDENCE.md` — receive: source 6iArKUXx 4048→3648; send: nullifier `43d571cf…` settled |
+| Agent has its own shielded LEZ account | Yes | `docs/TESTNET_EVIDENCE.md` (testnet, since reset) + reproducible local real-proof: the agent funds and holds its own shielded account in `docs/F8_LINUX_FULL_EVIDENCE.txt` |
+| Agent can send AND receive tokens (real proofs, `RISC0_DEV_MODE=0`) | Yes | reproducible local real-proof (`docs/lp0008-f8-linux-demo.mp4`, `docs/F8_LINUX_FULL_EVIDENCE.txt`): agent funded 0→100 (receive) and pays a peer 100→95 (send), both `RISC0_DEV_MODE=0`. Historical testnet capture: `docs/TESTNET_EVIDENCE.md` (since reset) |
 | Spending threshold: below-limit auto-executes | Yes | `docs/EVIDENCE_LOCAL.md` §A2A — `pending_approval` / `approve_pending` flow with balance changes |
 | Spending threshold: above-limit → pending approval → execute | Yes | `docs/SECURITY_MODEL.md` + `docs/EVIDENCE_LOCAL.md` |
 | A2A: Agent Card (A2A schema + x-lez extensions), discover/task/subscribe over Logos Messaging | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c; `docs/A2A_BINDING.md` |
 | A2A: autonomous discover → price-resolution → task-open loop (agent-driven) | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c |
 | F8 full flow on Linux: two agents discover, run the A2A task, pay autonomously | Yes | `docs/lp0008-f8-linux-demo.mp4` and `docs/F8_LINUX_FULL_EVIDENCE.txt`: peer_count=1, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5), `RISC0_DEV_MODE=0` |
 | Owner cross-instance channel | Yes | `docs/EVIDENCE_LOCAL.md` §3 — 2nd logoscore client over owner token |
-| Three testnet agents created + funded with native LEZ (real proofs) | Yes | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging agents; source RPC-confirmed 4048→3648 |
-| Blockchain agent outbound shielded transfer settled on testnet | Yes | `docs/TESTNET_EVIDENCE.md` — nullifier `43d571cf…` after `sync-private` |
+| Three testnet agents created + funded with native LEZ (real proofs) | Yes | reproducible local per-category: `docs/LOCAL_F10_EVIDENCE.md` (one agent each for storage/messaging/blockchain). Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
+| Blockchain agent outbound shielded transfer settled on testnet | Yes | reproducible local real-proof: agent pays a discovered peer (real proof, settled) in `docs/lp0008-f8-linux-demo.mp4`. Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
 | Single-command deploy (`agent up`) | Yes | `agent-cli/` |
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
@@ -200,7 +200,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | A2A-compatible: Agent Card, task lifecycle, transport binding documented | DONE | `docs/A2A_BINDING.md` |
 | Two agents discover + task + pay LEZ autonomously | DONE | Verified live on Linux: `peer_count=1`, A2A task opened, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5). `docs/lp0008-f8-linux-demo.mp4`, `docs/F8_LINUX_FULL_EVIDENCE.txt` |
 | 3 illustrative use cases on testnet | DONE | Blockchain settle on LEZ testnet; Storage cross-node CID round-trip on Codex testnet; Messaging two-node Waku relay (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`) |
-| 3 testnet agents (one per skill category) | DONE | Blockchain/Storage/Messaging accounts funded on testnet — `docs/TESTNET_EVIDENCE.md` |
+| 3 testnet agents (one per skill category) | DONE | one agent per category, reproducible: `docs/LOCAL_F10_EVIDENCE.md`. Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
 | Full documentation | DONE | `docs/` |
 | Third-party skill interface (ISkill) | DONE | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` |
 | Owner interface from Basecamp | DONE | `basecamp-app/`; owner channel verified |

@@ -1,6 +1,15 @@
 # LP-0008 — Hosted LEZ Testnet Evidence
 
 **Network:** `https://testnet.lez.logos.co/` (live; block height ~56,040 at capture)
+
+> **Important — the hosted LEZ testnet has been reset since this capture.** At capture the chain
+> was at block ~56,040; today `getLastBlockId` on `https://testnet.lez.logos.co/` returns ~5567,
+> a fresh chain. The accounts, nonces, and tx hashes below were real and RPC-confirmed on the
+> chain **at capture time** (`RISC0_DEV_MODE=0`), but they will not resolve on the current reset
+> chain. The **reproducible** real-proof evidence an evaluator can run today is the local LEZ
+> demos: the comprehensive video + `tests/demo-f8-linux-full.sh`, `docs/LOCAL_F10_EVIDENCE.md`,
+> and `docs/F8_LINUX_FULL_EVIDENCE.txt` — same capabilities (create, fund, send, receive,
+> three category agents), all with real proofs on a standalone sequencer.
 **Proof mode:** `RISC0_DEV_MODE=0` (real RISC0 proofs)
 **Wallet:** `lez-build/target/release/wallet`, `check-health` against the hosted testnet → **✅ All looks good** (client/sequencer versions compatible)
 
