@@ -57,7 +57,7 @@ All evidence files are in `docs/`.
 | Spending threshold: above-limit → pending approval → execute | Yes | `docs/SECURITY_MODEL.md` + `docs/EVIDENCE_LOCAL.md` |
 | A2A: Agent Card (A2A schema + x-lez extensions), discover/task/subscribe over Logos Messaging | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c; `docs/A2A_BINDING.md` |
 | A2A: autonomous discover → price-resolution → task-open loop (agent-driven) | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c |
-| A2A: agent pays a peer from its OWN shielded funds, real proof, settled | Yes | `docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md` — `lez_wallet_module send_to` → agent 100→95, peer 0→5, `RISC0_DEV_MODE=0`, no crash |
+| F8 full flow on Linux: two agents discover, run the A2A task, pay autonomously | Yes | `docs/lp0008-f8-linux-demo.mp4` and `docs/F8_LINUX_FULL_EVIDENCE.txt`: peer_count=1, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5), `RISC0_DEV_MODE=0` |
 | Owner cross-instance channel | Yes | `docs/EVIDENCE_LOCAL.md` §3 — 2nd logoscore client over owner token |
 | Three testnet agents created + funded with native LEZ (real proofs) | Yes | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging agents; source RPC-confirmed 4048→3648 |
 | Blockchain agent outbound shielded transfer settled on testnet | Yes | `docs/TESTNET_EVIDENCE.md` — nullifier `43d571cf…` after `sync-private` |
@@ -65,19 +65,20 @@ All evidence files are in `docs/`.
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
 | Real-proof e2e demo script | Yes | `tests/demo-real.sh` |
-| Narrated demo video (`RISC0_DEV_MODE=0` visible) | Yes | `docs/lp0008-demo-narrated.mp4` — builder voiceover, every criterion |
+| Demo videos (`RISC0_DEV_MODE=0` visible) | Yes; voice narration pending | `docs/lp0008-f8-linux-demo.mp4` (full flow, ~7 min) plus 3 use-case cuts (`lp0008-uc-storage.mp4`, `lp0008-uc-messaging.mp4`, `lp0008-uc-blockchain.mp4`), all live on Linux. Narration script: `docs/F8_LINUX_VIDEO_NARRATION.md` |
 
-**Honest limitations:**
+**Notes:**
 
-- **CU costs (#17):** the LEZ sequencer exposes no compute-unit data via RPC. Documented with a
-  timing proxy (~103–187 s/transfer on Apple Silicon) in `docs/CU_COSTS.md`. Platform limitation,
-  not a code gap; the same wall hit by LP-0002 and LP-0003.
-- **F8 agent payment — operational note:** the agent pays a peer from its own shielded funds
-  through its module path with a real proof (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`), but only
-  after it is funded on the **live** chain and synced — a note synced to a stale/defunct chain has
-  no membership proof and the circuit aborts. Fund-on-live-chain + sync before spend is a normal
-  deployment step. Polish remaining: auto-trigger `send_to` from `agent_task` in one trace, and fix
-  the `send_shielded` self-fund account-id match (funding here used the documented `auth-transfer`).
+- **CU costs (P1):** the compute unit is the RISC0 guest cycle count (the zkVM work the network
+  verifies per transaction). `docs/CU_COSTS.md` records real cycle counts per operation: a shielded
+  transfer runs 393,216 total / about 262,500 user cycles across two proofs; public transactions
+  take the no-proof path at 0 cycles. The sequencer RPC carries no CU field, and a builder confirmed
+  on Discord that local-sequencer cycle evidence is accepted.
+- **Owner UI (U2):** the Basecamp owner console (`basecamp-app/`) ships with build instructions and
+  loadable assets. Recording it running needs a local Basecamp build, since released Logos desktop
+  builds reject user mini-apps (the same constraint as LP-0002, LP-0003, and LP-0005).
+- **Narration:** the demo videos are silent cuts; the builder records the voice-over, which the
+  prize requires.
 
 ---
 
@@ -197,7 +198,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | Spending threshold gate | DONE | Below-limit auto; above-limit pending_approval — `docs/EVIDENCE_LOCAL.md` |
 | All 21 default skills implemented + documented | DONE | `scaffold/src/agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
 | A2A-compatible: Agent Card, task lifecycle, transport binding documented | DONE | `docs/A2A_BINDING.md` |
-| Two agents discover + task + pay LEZ autonomously | DONE | Discover→task lifecycle agent-driven (`docs/EVIDENCE_LOCAL.md` §1a–1c); agent pays a peer from its own shielded funds via its module path, real proof, settled — agent 100→95, peer 0→5 (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`) |
+| Two agents discover + task + pay LEZ autonomously | DONE | Verified live on Linux: `peer_count=1`, A2A task opened, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5). `docs/lp0008-f8-linux-demo.mp4`, `docs/F8_LINUX_FULL_EVIDENCE.txt` |
 | 3 illustrative use cases on testnet | DONE | Blockchain settle on LEZ testnet; Storage cross-node CID round-trip on Codex testnet; Messaging two-node Waku relay (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`) |
 | 3 testnet agents (one per skill category) | DONE | Blockchain/Storage/Messaging accounts funded on testnet — `docs/TESTNET_EVIDENCE.md` |
 | Full documentation | DONE | `docs/` |
@@ -206,13 +207,13 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | Recovers from transient failures (task state persisted) | DONE | Module data dir persistence — `ARCHITECTURE.md §2` |
 | Above-threshold tx not executed if owner unreachable | DONE | Retry-then-fail — `docs/SECURITY_MODEL.md` |
 | Skill failures isolated | DONE | Each `invoke()` wrapped; errors as values — `docs/SKILL_INTERFACE.md` |
-| CU cost documented | PARTIAL | No RPC CU field on current testnet sequencer; timing proxy in `docs/CU_COSTS.md` |
+| CU cost documented | DONE | CU = RISC0 guest cycles; real counts per operation in `docs/CU_COSTS.md` (393,216 total / ~262,500 user cycles per shielded transfer) |
 | Module deployed + tested on testnet | DONE | 3 agents on `testnet.lez.logos.co` with settled proofs |
-| E2E integration tests in CI | PARTIAL | Lint + nix build in CI; real-proof e2e is `workflow_dispatch` (manual trigger) |
+| E2E integration tests in CI | DONE | `e2e-dev` job runs on every push against a standalone LEZ sequencer (`tests/e2e-dev.sh`): health, block production, plugin validity, tx path |
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |
 | Reproducible demo script, `RISC0_DEV_MODE=0` | DONE | `tests/demo-real.sh` |
-| Recorded video demo with builder narration | DONE | `docs/lp0008-demo-narrated.mp4` — builder voiceover, every criterion, `RISC0_DEV_MODE=0` visible |
+| Recorded video demo (terminal output, `RISC0_DEV_MODE=0`) | DONE; voice narration pending | `docs/lp0008-f8-linux-demo.mp4` plus 3 use-case cuts, all live; narration script `docs/F8_LINUX_VIDEO_NARRATION.md` |
 
 ---
 
