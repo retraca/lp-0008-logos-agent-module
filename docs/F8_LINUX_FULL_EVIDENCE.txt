@@ -1,0 +1,31 @@
+====================================================================
+ LP-0008 F8 on Linux: two agents discover, then pay autonomously
+ RISC0_DEV_MODE=0 (real STARK proofs)
+====================================================================
+
+## 1. start standalone LEZ sequencer (seeded genesis = 10000 LEZ)
+   block tip: {"jsonrpc":"2.0","id":1,"result":89}
+
+## 2. create two agents' shielded LEZ accounts (NPK identities)
+   agent A npk: 046ca81d208a35847ffafc3598e774be...
+   agent B npk: 5a7b8d732e818e2c01b3e6b585fb7be5...
+
+## 3. fund agent A from genesis (public->private, REAL proof ~2min)
+   funding tx: Transaction hash is 20c8d193dc80898fc5c02ab91dbcd8ecaf1ee5b1ff37d577f226408c681eb1ed
+   agent A balance: 100 LEZ
+
+## 4. boot two Logos Core agents + Waku, configure their NPK identities
+   modules: {'crashed': 0, 'loaded': 5, 'not_loaded': 0}
+
+## 5. agents discover each other over Logos Messaging (A2A Agent Cards)
+   agent A peer_count: 1   (discovered B npk: 5a7b8d732e818e2c01b3e6b585fb7be5...)
+
+## 6. agent A pays the discovered peer B autonomously (REAL proof ~2min)
+   payment tx: Transaction hash is 2210ad3a25ff11be984417b29c7541ffb112977d5d08f9d5875df0fc011b788c
+
+====================================================================
+ RESULT:  discovery peer_count = 1
+          agent A balance: 100 -> 95 LEZ   (paid 5)
+          peer  B balance:   0 -> 5 LEZ   (received 5, real proof)
+====================================================================
+FULL_DEMO_DONE

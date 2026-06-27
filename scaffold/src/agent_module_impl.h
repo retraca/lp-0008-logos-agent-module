@@ -89,7 +89,8 @@ private:
     void        ensure_loaded();
     void        sync_config_fields();
     void        record_spend(double amount);
-    void        send_owner_message(const std::string& text);
+    bool        send_owner_message(const std::string& text);
+    void        ensure_storage_subscription();
     std::string create_pending_proposal(const std::string& action,
                                         const std::string& recipient,
                                         const std::string& amount,

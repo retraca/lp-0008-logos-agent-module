@@ -23,8 +23,10 @@
 // Included from sdk_generated/ at build time (logos-cpp-generator --general-only).
 #include "logos_sdk.h"
 #include "logos_mode.h"
+#include "logos_lp_client.h"   // raw event subscribe (bypasses lossy generated onMessageReceived)
 
 #include <nlohmann/json.hpp>
+#include <memory>
 
 #include <algorithm>
 #include <chrono>
@@ -33,6 +35,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <thread>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -48,6 +51,33 @@ namespace fs = std::filesystem;
 
 namespace {
 
+// F8: process-global discovery state. The lp_subscribe handler (registered in
+// agent_discover) and meta_status can run on different AgentModuleImpl instances
+// in the same host process, so the discovered peers must live outside impl_ to be
+// visible across them. Isolation model: Logos Core runs ONE agent_module per host
+// process (logos_host_qt --name agent_module), so this global is scoped to a single
+// agent identity — it is not shared across tenants. (If a future host multiplexes
+// several agents in one process, this must move to per-identity state.) The map is
+// bounded at insert time (see kMaxDiscoveredPeers) to prevent discovery-flood DoS.
+static std::unordered_map<std::string, nlohmann::json> g_discovered_peers;
+static std::mutex g_peers_mu;
+
+// Minimal RFC 4648 base64 decoder. The delivery messageReceived payload arrives
+// wrapped as {"_bytes":"<base64 of the card JSON>"}; decode it to recover the card.
+inline std::string agent_b64_decode(const std::string& in) {
+    static const std::string T =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    std::string out; int val = 0, bits = -8;
+    for (unsigned char c : in) {
+        if (c == '=') break;
+        auto p = T.find(c);
+        if (p == std::string::npos) continue;
+        val = (val << 6) + static_cast<int>(p); bits += 6;
+        if (bits >= 0) { out.push_back(static_cast<char>((val >> bits) & 0xFF)); bits -= 8; }
+    }
+    return out;
+}
+
 // Module version, mirrored from metadata.json.
 constexpr const char* kVersion = "0.0.1";
 
@@ -58,7 +88,10 @@ constexpr const char* kPendingFile  = "pending_proposals.json";
 constexpr const char* kCidMapFile   = "cid_labels.json";
 
 // A2A discovery content topic (overridable via meta_configure "discovery_topic").
-constexpr const char* kDefaultDiscoveryTopic = "/logos/agent-discovery/1/default/proto";
+// MUST be a valid Waku autosharding content topic: /<app>/<version-NUMBER>/<name>/<enc>.
+// The version segment has to be numeric or Waku rejects the publish with
+// "generation should be a numeric value" (see F8_DISCOVERY_FIX.md).
+constexpr const char* kDefaultDiscoveryTopic = "/logos/1/agent-discovery/proto";
 
 // Error envelope helper.
 inline std::string err(const std::string& msg) {
@@ -179,6 +212,34 @@ struct AgentModuleImpl::Impl {
 
     // --- bound skill module names (from config "skill_providers") ---
     std::vector<std::string> skill_providers;
+
+    // --- discovered peer agents (in-memory; keyed by peer npk) ---
+    // Populated by the delivery_module "messageReceived" handler when peer
+    // Agent Cards arrive on the discovery topic (F8: the agent ingests other
+    // agents' cards instead of only publishing its own).
+    std::unordered_map<std::string, json> discovered_peers;
+    bool discovery_handler_registered = false;
+    // The peer-card handler runs on the delivery event-dispatch thread, while
+    // agent_discover reads discovered_peers on the RPC thread. Guard both with
+    // this mutex (concurrent map access is otherwise an uncatchable crash).
+    std::mutex peers_mu;
+    // Raw delivery event subscription: the generated onMessageReceived coerces
+    // the byte payload to an empty JSON object, so we subscribe to the raw
+    // "messageReceived" event via LpClient and decode the payload ourselves.
+    // Both must outlive the subscription (LpSubscription unsubscribes on destroy).
+    std::unique_ptr<logos::LpClient> disc_client;
+    logos::LpSubscription disc_sub;
+
+    // --- storage upload completion (F9 storage round-trip) ---
+    // uploadUrl() returns a sessionId; the CID arrives later via the
+    // storage_module "storageUploadDone" event. We subscribe to that event,
+    // remap the pending label to the resolved CID, and record sessionId->CID so
+    // storage_upload can return the real content address synchronously.
+    std::unique_ptr<logos::LpClient> store_client;
+    logos::LpSubscription store_sub;
+    bool storage_handler_registered = false;
+    std::unordered_map<std::string, std::string> session_cid; // sessionId -> CID
+    std::mutex storage_mu;
 
     // --- data directory (set by LogosModuleContext at init time) ---
     fs::path data_dir;
@@ -368,41 +429,58 @@ std::string AgentModuleImpl::create_pending_proposal(
         {"created_at",   utc_now_iso()}
     };
 
-    impl_->pending_proposals[proposal_id] = proposal;
-    impl_->save_pending();
-
     // Fire the approval_required event (subscribers / the generated Qt wrapper
     // route this to the owner channel).
     approval_required(proposal_id, proposal.dump());
 
-    // Also send it to the owner over the chat owner channel if configured.
-    send_owner_message("approval_required: " + proposal.dump());
+    // Reliability (R2): the spend is held and is NOT executed without approval,
+    // whether or not the owner can be reached. Try to notify the owner over the
+    // Logos Messaging owner channel, retrying a few times, and record whether the
+    // owner was reached on the proposal so a failure-to-notify is reported (it is
+    // visible in pending_proposals / meta_status). The held spend never executes here.
+    constexpr int kMaxNotifyAttempts = 3;
+    bool notified = false;
+    int  attempts = 0;
+    for (; attempts < kMaxNotifyAttempts && !notified; ++attempts) {
+        notified = send_owner_message("approval_required: " + proposal.dump());
+    }
+    proposal["notified"]        = notified;
+    proposal["notify_attempts"] = attempts;
+    // status stays "pending_approval" so the owner can still approve it once
+    // reachable; the notify outcome is reported via the "notified" field.
+
+    impl_->pending_proposals[proposal_id] = proposal;
+    impl_->save_pending();
 
     return json{
         {"status",      "pending_approval"},
         {"proposal_id", proposal_id},
+        {"notified",    notified},
         {"proposal",    proposal}
     }.dump();
 }
 
 // Send a plaintext (hex-encoded) message to the owner via the chat_module
-// owner channel. Best-effort; errors are swallowed (the event was already fired).
-void AgentModuleImpl::send_owner_message(const std::string& text) {
-    if (owner_address_.empty()) return;
+// owner channel. Returns true only if the message reached the owner channel, so
+// callers can detect an unreachable owner (the approval_required event is fired
+// separately, independent of this best-effort delivery).
+bool AgentModuleImpl::send_owner_message(const std::string& text) {
+    if (owner_address_.empty()) return false;
     try {
         std::string owner_convo_id = impl_->cfg("owner_convo_id");
         std::string hex_content    = hex_encode(text);
         if (owner_convo_id.empty()) {
-            bool ok_r = modules().chat_module.newPrivateConversation(
+            return modules().chat_module.newPrivateConversation(
                 owner_address_,
                 hex_content);
-            (void)ok_r;
-        } else {
-            modules().chat_module.sendMessage(
-                owner_convo_id,
-                hex_content);
         }
-    } catch (...) { /* owner unreachable; the event was already emitted */ }
+        modules().chat_module.sendMessage(
+            owner_convo_id,
+            hex_content);
+        return true;
+    } catch (...) {
+        return false; // owner unreachable; the event was already emitted
+    }
 }
 
 
@@ -410,33 +488,50 @@ void AgentModuleImpl::send_owner_message(const std::string& text) {
 // Storage skills
 // ---------------------------------------------------------------------------
 
+// Register the storage_module "storageUploadDone" subscription once. The event
+// carries (success, sessionId, cid); we record sessionId->CID and remap the
+// pending label to the resolved content address. Runs on the storage event
+// thread, so it shares impl_->storage_mu with the upload poll below.
+void AgentModuleImpl::ensure_storage_subscription() {
+    if (impl_->storage_handler_registered) return;
+    try {
+        impl_->store_client = std::make_unique<logos::LpClient>("storage_module", "agent_module");
+        impl_->store_sub = impl_->store_client->subscribe("storageUploadDone",
+            [this](nlohmann::json a) {
+                try {
+                    if (!a.is_array() || a.size() < 3) return;
+                    bool ok_up        = a[0].is_boolean() ? a[0].get<bool>() : false;
+                    std::string sid   = a[1].is_string()  ? a[1].get<std::string>() : "";
+                    std::string cid   = a[2].is_string()  ? a[2].get<std::string>() : "";
+                    if (!ok_up || sid.empty() || cid.empty()) return;
+                    std::lock_guard<std::mutex> lk(impl_->storage_mu);
+                    impl_->session_cid[sid] = cid;
+                    auto it = impl_->cid_labels.find("__pending__" + sid);
+                    if (it != impl_->cid_labels.end()) {
+                        impl_->cid_labels[cid] = it->second; // CID -> label
+                        impl_->cid_labels.erase(it);
+                        impl_->save_cid_map();
+                    }
+                } catch (...) { /* ignore malformed events */ }
+            });
+        impl_->storage_handler_registered = true;
+    } catch (...) { /* subscription unavailable; upload still returns the sessionId */ }
+}
+
 std::string AgentModuleImpl::storage_upload(const std::string& path, const std::string& label) {
     ensure_loaded();
     try {
-        // TODO: verify API shape against logos-core source
-        // The storage_module is a hand-written Qt plugin (not universal), so the
-        // typed modules().storage_module.* calls go through the generated QVariant shim.
-        // Expected call: modules().storage_module.uploadUrl("file://" + path, 0)
-        // Returns a sessionId; the actual CID arrives via storageUploadDone event.
-        // For a synchronous result suitable for our wire return type, we would need
-        // to block on the event or use an async callback. The cleanest path here is
-        // to expose an uploadSync helper in the lez_wallet_module or use a future/promise.
-        // Since the generated wrapper does provide a *Async variant, we use a simple
-        // blocking wait pattern via std::promise:
-        //
-        // BLOCKED: needs Logos SDK headers (std::promise integration with LogosModuleContext)
-        //
-        // Stubbed implementation that calls the module and returns a pending result.
-        // The caller can subscribe to task_update events for the actual CID.
+        // Subscribe to storageUploadDone before uploading so we catch the CID.
+        ensure_storage_subscription();
 
         std::string session_id = make_id("upload");
 
-        // Route the upload through the platform storage_module.
+        // Route the upload through the platform storage_module (Logos Storage / Codex).
         if (isContextReady()) {
             try {
                 StdLogosResult res = modules().storage_module.uploadUrl(
                     std::string("file://") + path,
-                    int64_t(0)
+                    int64_t(65536) // storage requires a positive chunk size
                 );
                 if (res.success) {
                     std::string sid = res.value.is_string() ? res.value.get<std::string>() : "";
@@ -445,18 +540,37 @@ std::string AgentModuleImpl::storage_upload(const std::string& path, const std::
             } catch (...) { /* best effort */ }
         }
 
-        // Record the label keyed on session_id; on storageUploadDone we remap to CID.
-        impl_->cid_labels["__pending__" + session_id] = label;
+        // Record the label against the pending session; the storageUploadDone
+        // handler remaps it to the CID when the upload completes.
+        {
+            std::lock_guard<std::mutex> lk(impl_->storage_mu);
+            impl_->cid_labels["__pending__" + session_id] = label;
+        }
         impl_->save_cid_map();
 
-        json result = {
-            {"status",     "upload_started"},
-            {"session_id", session_id},
-            {"path",       path},
-            {"label",      label},
-            {"note",       "subscribe to task_update for cid when upload completes"}
-        };
-        return ok(result);
+        // Wait (bounded) for the storageUploadDone event to deliver the CID, so
+        // the skill can return the real content address. The event fires on the
+        // storage event thread, so polling here does not deadlock.
+        // Bounded poll kept well under the inter-module RPC timeout (~20s); a
+        // small file completes in well under a second.
+        std::string cid;
+        for (int i = 0; i < 24 && cid.empty(); ++i) {
+            {
+                std::lock_guard<std::mutex> lk(impl_->storage_mu);
+                auto it = impl_->session_cid.find(session_id);
+                if (it != impl_->session_cid.end()) cid = it->second;
+            }
+            if (cid.empty()) std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
+
+        if (!cid.empty()) {
+            return ok({{"status", "stored"}, {"cid", cid}, {"label", label}, {"path", path}});
+        }
+        // Upload accepted but the CID has not arrived yet; the label is pending
+        // and storage_list will show the CID once storageUploadDone fires.
+        return ok({{"status", "upload_started"}, {"session_id", session_id},
+                   {"label", label}, {"path", path},
+                   {"note", "cid will appear in storage_list when the upload completes"}});
     } catch (const std::exception& e) {
         skill_failed("storage_upload", e.what());
         return err(e.what());
@@ -476,7 +590,7 @@ std::string AgentModuleImpl::storage_download(const std::string& address, const 
                     address,
                     std::string("file://") + path,
                     true,
-                    int64_t(0)
+                    int64_t(65536)
                 );
                 if (res.success) {
                     status_str = "download_ok";
@@ -778,11 +892,20 @@ std::string AgentModuleImpl::wallet_send_to(const std::string& npk, const std::s
                 {"created_at",   utc_now_iso()}
             };
             std::string proposal_id = proposal["proposal_id"].get<std::string>();
+            approval_required(proposal_id, proposal.dump());
+            // Reliability (R2): the over-threshold spend is held and NOT executed,
+            // whether or not the owner can be reached. Retry the owner notification
+            // and record whether it was delivered so a failure-to-notify is reported.
+            constexpr int kMaxNotifyAttempts = 3;
+            bool notified = false; int attempts = 0;
+            for (; attempts < kMaxNotifyAttempts && !notified; ++attempts) {
+                notified = send_owner_message("approval_required: " + proposal.dump());
+            }
+            proposal["notified"]        = notified;
+            proposal["notify_attempts"] = attempts;
             impl_->pending_proposals[proposal_id] = proposal;
             impl_->save_pending();
-            approval_required(proposal_id, proposal.dump());
-            send_owner_message("approval_required: " + proposal.dump());
-            return json{{"status","pending_approval"},{"proposal_id",proposal_id},{"proposal",proposal}}.dump();
+            return json{{"status","pending_approval"},{"proposal_id",proposal_id},{"notified",notified},{"proposal",proposal}}.dump();
         }
 
         BIND_LEZ_WALLET(wallet)
@@ -1036,28 +1159,98 @@ std::string AgentModuleImpl::agent_discover(const std::string& topic) {
             ? impl_->cfg("discovery_topic", kDefaultDiscoveryTopic)
             : topic;
 
-        // Subscribe to the discovery topic via delivery_module.
-        modules().delivery_module.subscribe(effective_topic);
+        // F8: register a one-time handler that ingests peer Agent Cards arriving
+        // on the discovery topic, so this agent actually discovers OTHER agents.
+        // We subscribe to the RAW "messageReceived" event via LpClient: the
+        // generated onMessageReceived coerces the byte payload to an empty object,
+        // so we decode _a = [hash, contentTopic, payload, ts] ourselves. The
+        // payload arrives as the published card bytes (a JSON-array of byte values
+        // or a string); reconstruct the string and parse the card.
+        if (!impl_->discovery_handler_registered) {
+            std::string my_topic = effective_topic;
+            // Subscribe the delivery NODE to the Waku content topic so it relays +
+            // emits messageReceived for peer cards.
+            modules().delivery_module.subscribe(effective_topic);
+            // Register the event handler via LpClient, NOT modules().delivery_module
+            // .onMessageReceived: the generated proxy acquires a QtRO replica, connects
+            // eventResponse, then RELEASES the replica when the call returns (verified
+            // via qt.remoteobjects logs: AddObject -> Connect 7 -> RemoveObject within
+            // ms), so the subscription dies before any peer card arrives. LpClient's
+            // lp_subscribe is the persistent SDK event mechanism (mirrors rust-sdk's
+            // EventSubscription); the returned LpSubscription, stored in impl_->disc_sub,
+            // keeps the subscription alive for the agent's lifetime. The payload is a
+            // JSON array [hash, contentTopic, payload, ts].
+            impl_->disc_client = std::make_unique<logos::LpClient>("delivery_module", "agent_module");
+            impl_->disc_sub = impl_->disc_client->subscribe("messageReceived",
+                [this, my_topic](nlohmann::json a) {
+                    try {
+                        if (!a.is_array() || a.size() < 3) return;
+                        std::string contentTopic = a[1].is_string() ? a[1].get<std::string>() : "";
+                        if (contentTopic != my_topic) return;
+                        const auto& payload = a[2];
+                        std::string payload_str;
+                        if (payload.is_object() && payload.contains("_bytes") && payload["_bytes"].is_string()) payload_str = agent_b64_decode(payload["_bytes"].get<std::string>());
+                        else if (payload.is_string()) payload_str = payload.get<std::string>();
+                        else if (payload.is_array()) { for (auto& b : payload) if (b.is_number_integer()) payload_str.push_back(static_cast<char>(b.get<int>())); }
+                        else payload_str = payload.dump();
+                        json card = safe_parse(payload_str);
+                        if (card.is_string()) card = safe_parse(card.get<std::string>());
+                        if (!card.is_object()) return;
+                        std::string peer_npk;
+                        if (card.contains("x-lez-identity") && card["x-lez-identity"].is_object())
+                            peer_npk = card["x-lez-identity"].value("npk", "");
+                        if (peer_npk.empty()) return;
+                        if (peer_npk == impl_->cfg("agent_npk", "")) return;  // skip our own card
+                        {
+                            std::lock_guard<std::mutex> lk(g_peers_mu);
+                            // Bound the map: a hostile peer can flood the discovery topic with
+                            // distinct npks. Cap total entries so discovery can't be turned into
+                            // an unbounded-memory DoS; known peers are still refreshed when full.
+                            constexpr size_t kMaxDiscoveredPeers = 512;
+                            if (g_discovered_peers.size() >= kMaxDiscoveredPeers &&
+                                g_discovered_peers.find(peer_npk) == g_discovered_peers.end()) return;
+                            g_discovered_peers[peer_npk] = {
+                                {"name",   card.value("name", "")},
+                                {"npk",    peer_npk},
+                                {"skills", card.value("skills", json::array())}
+                            };
+                        }
+                    } catch (...) { /* ignore malformed peer messages */ }
+                });
+            impl_->discovery_handler_registered = true;
+        }
 
         // Publish our own Agent Card to the topic so peers can discover us.
+        // Send as a JSON STRING: the generated delivery send() turns a string
+        // LogosMap into the wire payload bytes (an object LogosMap serialises to
+        // 0 bytes). NOTE: the matching generated onMessageReceived binding maps
+        // the received bytes to a LogosMap and only forwards JSON objects, so a
+        // peer reading via that event gets an empty payload — a generated-binding
+        // limitation (see F8_DISCOVERY_FIX.md); the card data itself does travel.
         std::string my_card_raw = agent_card();
         json my_card_j = safe_parse(my_card_raw);
-        if (my_card_j.contains("result")) {
+        if (my_card_j.contains("result") && my_card_j["result"].is_object()) {
             std::string card_str = my_card_j["result"].dump();
-            modules().delivery_module.send(
-                effective_topic,
-                nlohmann::json(card_str));
+            modules().delivery_module.send(effective_topic, nlohmann::json(card_str));
         }
 
         // Store the topic so we can unsubscribe later.
         impl_->config["last_discover_topic"] = effective_topic;
         impl_->save_config();
 
+        // Return the peers discovered so far (cards ingested by the handler).
+        json peers = json::array();
+        {
+            std::lock_guard<std::mutex> lk(g_peers_mu);
+            for (auto& kv : g_discovered_peers) peers.push_back(kv.second);
+        }
+
         return ok({
-            {"status",  "subscribed_and_published"},
-            {"topic",   effective_topic},
-            {"card_published", true},
-            {"note",    "agent card published to topic; peer cards arrive via messageReceived event"}
+            {"status",           "subscribed_and_published"},
+            {"topic",            effective_topic},
+            {"card_published",   true},
+            {"discovered_peers", peers},
+            {"peer_count",       peers.size()}
         });
     } catch (const std::exception& e) {
         skill_failed("agent_discover", e.what());
@@ -1434,6 +1627,14 @@ std::string AgentModuleImpl::meta_status() {
             }
         }
 
+        // Discovered peers (F8) — exposed here too so callers can read them
+        // without re-invoking agent_discover (whose subscribe can block).
+        json discovered = json::array();
+        {
+            std::lock_guard<std::mutex> lk(g_peers_mu);
+            for (auto& kv : g_discovered_peers) discovered.push_back(kv.second);
+        }
+
         json status = {
             {"version",           kVersion},
             {"balance",           balance_str},
@@ -1441,6 +1642,8 @@ std::string AgentModuleImpl::meta_status() {
             {"active_tasks",      active_tasks},
             {"pending_approvals", pending_approvals},
             {"skill_providers",   impl_->skill_providers},
+            {"discovered_peers",  discovered},
+            {"peer_count",        discovered.size()},
             {"timestamp",         utc_now_iso()}
         };
         return ok(status);

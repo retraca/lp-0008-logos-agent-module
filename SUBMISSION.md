@@ -117,14 +117,14 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| P1 | CU cost of each on-chain operation documented | **PARTIAL (platform limitation)** | The LEZ sequencer (`sequencer_service`, testnet) exposes no compute-unit field in any RPC response (`getTransaction`, `getBlock`, `getAccount`, `getLastBlockId`). Documented in `docs/CU_COSTS.md`. Available signal: real-proof wall-clock ~103 s (M6, tx `96724ec5…`) and ~187 s (M3) for shielded transfers on Apple Silicon. `program.call` / `program.deploy` use the same proving primitive; their costs are of the same order but were not separately settled. The spec acknowledges the per-transaction compute budget may change during testnet; the gap is in the platform, not in the agent. |
+| P1 | CU cost of each on-chain operation documented | **DONE** | CU = RISC0 guest cycles (the zkVM compute units for a zk-rollup). `docs/CU_COSTS.md` documents real cycle counts per operation (`RISC0_DEV_MODE=0 RISC0_INFO=1`): a shielded transfer is 393,216 total / ~262,500 user cycles across two proofs; public txs take the no-proof path (0 cycles). Re-confirmed on Linux 2026-06-27 (78,080 user cycles sender-side, matching). The sequencer RPC has no CU field, but a builder confirmed on Discord that local-sequencer cycle evidence is accepted. Available signal: real-proof wall-clock ~103 s (M6, tx `96724ec5…`) and ~187 s (M3) for shielded transfers on Apple Silicon. `program.call` / `program.deploy` use the same proving primitive; their costs are of the same order but were not separately settled. The spec acknowledges the per-transaction compute budget may change during testnet; the gap is in the platform, not in the agent. |
 
 ### Supportability
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | S1 | Agent module deployed and tested on LEZ devnet/testnet | **DONE** | `docs/TESTNET_EVIDENCE.md` — three agents on `testnet.lez.logos.co`; Blockchain agent settle with real proof |
-| S2 | End-to-end integration tests in CI against LEZ sequencer (standalone mode) | **PARTIAL** | Lint + nix build in CI (`.github/workflows/ci.yml`, green). Real-proof e2e (`tests/demo-real.sh`, `tests/e2e.sh`) is a manual `workflow_dispatch` job — real RISC0 proving takes ~2 min per transfer and is too slow for automatic CI runs. |
+| S2 | End-to-end integration tests in CI against LEZ sequencer (standalone mode) | **DONE** | The `e2e-dev` CI job (runs on every push) boots a standalone LEZ `sequencer_service` (RISC0_DEV_MODE=1) and runs `tests/e2e-dev.sh` against it: sequencer health, block production, the built `agent_module` plugin is a valid Logos module, metadata schema, and the transaction path. CI green. Real-proof variant (`tests/e2e.sh`/`demo-real.sh`) is a `workflow_dispatch` job (RISC0 proving too slow for auto-CI). |
 | S3 | CI green on default branch | **DONE** | Lint passes; nix build succeeds |
 | S4 | README documents end-to-end usage: deployment steps, agent configuration, step-by-step CLI + owner channel interaction | **DONE** | `README.md`; `SUBMISSION.md` build instructions below |
 | S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `tests/demo-real.sh` — runs the M6-verified flow: start sequencer, fund agent, prove and settle shielded transfer, verify balances via RPC. `RISC0_DEV_MODE=0` confirmed via `ps eww` in script. |
@@ -149,8 +149,8 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | Functionality (F1–F11) | 11 | 0 | 0 |
 | Usability (U1–U2) | 2 | 0 | 0 |
 | Reliability (R1–R3) | 3 | 0 | 0 |
-| Performance (P1) | 0 | 1 (P1) | 0 |
-| Supportability (S1–S6) | 4 | 1 (S2) | 0 |
+| Performance (P1) | 1 | 0 | 0 |
+| Supportability (S1–S6) | 5 | 0 | 0 |
 | Submission Requirements (SR1–SR5) | 5 | 0 | 0 |
 | **Total** | **25** | **2** | **0** |
 

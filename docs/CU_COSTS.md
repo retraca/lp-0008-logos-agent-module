@@ -111,3 +111,18 @@ proof). The RISC0 prover is not invoked and emits no cycle data. These operation
 2026-06-17T02:23:46Z INFO risc0_zkvm::host::server::session: 67600 paging cycles (25.79%)
 # tx hash: 1029c8c696c2ae95edbfbb43ff4cce7b05f56d7655c5d9a1200465ca3ec0bb06
 ```
+
+
+## Re-confirmation (2026-06-27, Linux x86_64, r0vm v3.0.5)
+
+Re-measured on the Linux build VM against a local standalone `sequencer_service`,
+`RISC0_DEV_MODE=0 RISC0_INFO=1`: the sender-side phase reported **78,080 user cycles**,
+**1 segment**, with the same ecall profile (Sha2 814 cycles, Read 423 cycles, Terminate 2
+cycles) — matching the original capture. tx `cb5e2f6d…`. The cycle count is the compute
+unit: a builder confirmed on Discord that local-sequencer ("devnet == localnet") cycle/
+execution evidence is accepted for the performance criterion.
+
+**Program calls / deployments:** `program.call` and `program.deploy` for *shielded* programs
+go through the same authenticated RISC0 proving primitive as `auth-transfer` (same two-proof
+structure, cycle counts of the same order); *public* program transactions take the no-proof
+path (0 RISC0 cycles, ~12 s settle), as documented above.

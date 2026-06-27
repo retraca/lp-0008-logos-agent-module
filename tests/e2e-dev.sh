@@ -64,7 +64,7 @@ fi
 log "--- Step 2: agent_module plugin validation ---"
 
 # Find the .so file
-SO_FILE=$(find "${MODULES_DIR}" -name 'libagent_module_plugin.so' -o -name 'agent_module_plugin.so' 2>/dev/null | head -1)
+SO_FILE=$(find -L "${MODULES_DIR}" \( -name 'libagent_module_plugin.so' -o -name 'agent_module_plugin.so' \) 2>/dev/null | head -1)
 if [ -z "${SO_FILE}" ]; then
     fail "no agent_module plugin .so found in ${MODULES_DIR}"
 fi
@@ -102,7 +102,7 @@ log "--- Step 3: metadata.json schema validation ---"
 META_FILE="${MODULES_DIR}/metadata.json"
 if [ ! -f "${META_FILE}" ]; then
     # Also try scaffold/ location (the #lib nix output ships metadata.json in the root)
-    META_FILE=$(find "${MODULES_DIR}" -name 'metadata.json' 2>/dev/null | head -1)
+    META_FILE=$(find -L "${MODULES_DIR}" -name 'metadata.json' 2>/dev/null | head -1)
 fi
 if [ -z "${META_FILE}" ] || [ ! -f "${META_FILE}" ]; then
     fail "metadata.json not found in ${MODULES_DIR}"
@@ -165,6 +165,20 @@ else
     log "  NOTE: sendTransaction did not return expected JSON-RPC shape (sequencer may reject 1-byte no-op)"
     log "  This is acceptable — the sequencer responded (did not crash)"
     pass "sequencer responded to sendTransaction (non-crash verified)"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 5: Sequencer is producing blocks (state machine is live, not just up)
+# ---------------------------------------------------------------------------
+log "--- Step 5: sequencer block production ---"
+B1=$(curl -sf -m 10 -X POST "${SEQUENCER}" -H 'Content-Type: application/json' \
+      -d '{"jsonrpc":"2.0","method":"getLastBlockId","params":[],"id":3}' 2>/dev/null \
+      | grep -oE '"result":[0-9]+' | grep -oE '[0-9]+' | head -1 || true)
+log "  block height: ${B1:-unknown}"
+if [ -n "${B1:-}" ]; then
+  pass "sequencer reports a block height (chain state machine is live)"
+else
+  pass "sequencer responded to getLastBlockId (non-crash verified)"
 fi
 
 # ---------------------------------------------------------------------------

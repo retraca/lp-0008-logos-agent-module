@@ -1,0 +1,25 @@
+--- a/cpp/implementations/qt_remote/remote_transport.cpp
++++ b/cpp/implementations/qt_remote/remote_transport.cpp
+@@ -200,9 +200,19 @@
+         qDebug() << "[LogosObject] RemoteLogosObject::onEvent subscribing to event:" << eventName;
+         if (!m_helper) {
+             m_helper = new RemoteEventHelper();
+-            QObject::connect(m_replica, SIGNAL(eventResponse(QString,QVariantList)),
+-                             m_helper, SLOT(onEventResponse(QString,QVariantList)));
+-            qDebug() << "[LogosObject] RemoteLogosObject: connected EventHelper to QRemoteObjectReplica signals (IPC)";
++            // FIX (LP-0008): a QRemoteObjectDynamicReplica has no signals in its
++            // meta-object until it is initialized, so connecting to eventResponse
++            // immediately silently fails and events are never delivered. Defer the
++            // connect until the replica is valid.
++            QRemoteObjectReplica* qrep = qobject_cast<QRemoteObjectReplica*>(m_replica);
++            auto doConnect = [this]() {
++                QObject::connect(m_replica, SIGNAL(eventResponse(QString,QVariantList)),
++                                 m_helper, SLOT(onEventResponse(QString,QVariantList)));
++                qDebug() << "[LogosObject] RemoteLogosObject: connected EventHelper after replica init (IPC)";
++            };
++            if (qrep && qrep->isInitialized()) { doConnect(); }
++            else if (qrep) { QObject::connect(qrep, &QRemoteObjectReplica::initialized, m_helper, doConnect); }
++            else { doConnect(); }
+         }
+         m_helper->addCallback(eventName, std::move(callback));
+     }

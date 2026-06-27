@@ -531,15 +531,30 @@ fn parse_call_expr(expr: &str) -> (String, Vec<String>) {
         .split(',')
         .map(|s| {
             let s = s.trim();
-            if (s.starts_with('"') && s.ends_with('"'))
-                || (s.starts_with('\'') && s.ends_with('\''))
-            {
+            let was_quoted = (s.starts_with('"') && s.ends_with('"'))
+                || (s.starts_with('\'') && s.ends_with('\''));
+            let unquoted = if was_quoted {
                 // Unescape simple JSON string escapes.
                 s[1..s.len() - 1]
                     .replace("\\\"", "\"")
                     .replace("\\\\", "\\")
             } else {
                 s.to_string()
+            };
+            // logoscore's `call` re-parses a bare numeric positional arg as a JSON
+            // number, but the module's meta_configure values (per_tx_limit, period
+            // seconds) are typed as strings — a bare `50` reaches it as a number and
+            // fails the type check. Re-wrap a numeric string-literal in quotes so it
+            // arrives as a JSON string; identifier keys and hex owners stay bare.
+            if was_quoted
+                && !unquoted.is_empty()
+                && unquoted
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || c == '.' || c == '-')
+            {
+                format!("\"{}\"", unquoted)
+            } else {
+                unquoted
             }
         })
         .collect();
