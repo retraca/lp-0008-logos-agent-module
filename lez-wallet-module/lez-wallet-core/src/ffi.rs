@@ -98,6 +98,21 @@ pub unsafe extern "C" fn lez_wallet_npk(
     }
 }
 
+/// Return the agent's ViewingPublicKey as a hex string.
+#[no_mangle]
+pub unsafe extern "C" fn lez_wallet_vpk(
+    home_dir: *const c_char,
+    passphrase: *const c_char,
+) -> *mut c_char {
+    let (Some(home), Some(pass)) = (unsafe { cstr_to_str(home_dir) }, unsafe { cstr_to_str(passphrase) }) else {
+        return error_result("null argument");
+    };
+    match block_on(provider::get_vpk(Path::new(home), pass)) {
+        Ok(vpk_hex) => to_cstring(&vpk_hex),
+        Err(e) => error_result(&e.to_string()),
+    }
+}
+
 /// Return the agent's shielded token balance as a decimal string.
 ///
 /// # Safety

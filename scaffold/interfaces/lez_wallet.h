@@ -24,6 +24,7 @@ public:
     // --- identity ---
     std::string ensure_account(const std::string& unused = "");
     std::string npk(const std::string& unused = "");
+    std::string vpk(const std::string& unused = "");
 
     // --- balance / history ---
     std::string balance(const std::string& unused = "");

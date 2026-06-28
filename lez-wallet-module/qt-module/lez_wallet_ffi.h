@@ -27,6 +27,8 @@ char *lez_wallet_ensure_account(const char *home_dir, const char *passphrase);
  */
 char *lez_wallet_npk(const char *home_dir, const char *passphrase);
 
+char *lez_wallet_vpk(const char *home_dir, const char *passphrase);
+
 /**
  * Return the agent's shielded token balance as a decimal string.
  *

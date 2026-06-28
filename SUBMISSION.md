@@ -4,6 +4,39 @@
 **Author:** Gonçalo Traça (github: retraca)
 **Submission date:** 2026-06-16
 
+## Verified integration status (2026-06-29)
+
+The agent<->wallet integration was rebuilt and verified end-to-end on Linux this cycle. Earlier
+the `lez_wallet_module` was not actually a loadable Logos plugin, so the agent's wallet/program
+skills returned empty and the demos paid via the wallet CLI rather than through the agent. That
+is now fixed and each item below is backed by real runtime output (real RISC0 proofs,
+`RISC0_DEV_MODE=0` where noted), not the scorecard:
+
+- **F1** - six modules load together including `lez_wallet_module`.
+- **F2** - the agent owns a shielded account and reads `balance: 100` through its own skills
+  after a real-proof genesis transfer (`tx 5f7e4ef6...`).
+- **F3** - single-command `agent up` deploy.
+- **F5** - the spending gate enforces per-tx and per-period limits (fixed a quote-parse bug in
+  `parse_amount` that had silently gated every spend to pending-approval).
+- **F6** - all 21 skills reach the real wallet: `program.query/call/deploy`, `wallet.history`,
+  `storage.share` return real wallet responses, no longer stubs.
+- **F7** - the A2A card carries the full shielded identity (`npk` and `vpk`).
+- **F8** - agent A autonomously discovers B's card, runs the A2A task, and pays from its own
+  shielded funds: **A 100->95, B 0->5, `RISC0_DEV_MODE=0`**. (Under real proving the synchronous
+  skill call returns after the Qt-RemoteObjects RPC window while the transfer settles in the
+  background; the payment lands on-chain.)
+- **F9** - real storage CID round-trip through the agent's own skills.
+
+Fixes this cycle: packaged `lez_wallet_module` as a real loadable Logos module (`mkLogosModule`,
+Qt 6.9.2, linking the prebuilt lez-bridge Rust core); added the `lez_wallet_vpk` FFI getter so
+the card exposes the full identity; replaced the non-delivering async send with the sync binding;
+fixed the spending-limit quote-parse bug; wired five previously-stub skills to real wallet calls.
+
+Remaining before resubmission: re-record the demo *through the agent* (real proofs), Git LFS for
+the 117 MB prebuilt core so the repo clones-and-builds, redeploy the three category agents on the
+live (reset) LEZ testnet with resolvable evidence, `agent.subscribe` streaming + `agent.cancel`
+refund, and a final scorecard pass.
+
 ---
 
 ## What is built

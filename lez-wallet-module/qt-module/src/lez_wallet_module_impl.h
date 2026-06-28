@@ -29,6 +29,7 @@ public:
     // --- Identity (passphrase-free; module manages passphrase internally) ---
     std::string ensure_account();
     std::string npk();
+    std::string vpk();
 
     // --- Balance and history ---
     std::string balance();

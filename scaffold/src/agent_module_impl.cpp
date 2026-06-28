@@ -117,8 +117,16 @@ std::string make_id(const std::string& prefix) {
 // Returns -1.0 on parse failure.
 double parse_amount(const std::string& s) {
     if (s.empty()) return -1.0;
+    // Config values can arrive JSON-quoted (e.g. the spending limits are stored as "50").
+    // Strip a single pair of surrounding double-quotes before parsing so the threshold
+    // gate sees a real number instead of failing to parse and blocking every spend.
+    std::string t = s;
+    if (t.size() >= 2 && t.front() == '"' && t.back() == '"') {
+        t = t.substr(1, t.size() - 2);
+    }
+    if (t.empty()) return -1.0;
     try {
-        return std::stod(s);
+        return std::stod(t);
     } catch (...) {
         return -1.0;
     }
@@ -683,16 +691,21 @@ std::string AgentModuleImpl::storage_share(const std::string& address, const std
             {"timestamp", utc_now_iso()}
         };
 
-        std::string hex_msg = hex_encode(share_payload.dump());
-
-        // TODO: verify API shape against logos-core source
-        // Open or reuse a 1:1 conversation with the recipient (their intro bundle string).
-        // modules().chat_module.newPrivateConversation(recipient, hex_msg);
+        // Deliver the share payload to the recipient over the agent's 1:1 chat
+        // conversation, reusing the working messaging_send path (which opens/reuses
+        // the conversation and hex-encodes the body).
+        std::string send_res = messaging_send(recipient, share_payload.dump());
+        json sj = safe_parse(send_res);
+        if (sj.is_object() && sj.contains("error")) {
+            skill_failed("storage_share", sj.value("error", std::string("share delivery failed")));
+            return send_res; // passthrough error envelope
+        }
 
         json result = {
             {"status",    "share_sent"},
             {"cid",       address},
-            {"recipient", recipient}
+            {"recipient", recipient},
+            {"delivery",  sj}
         };
         return ok(result);
     } catch (const std::exception& e) {
@@ -909,32 +922,19 @@ std::string AgentModuleImpl::wallet_send_to(const std::string& npk, const std::s
         }
 
         BIND_LEZ_WALLET(wallet)
-        // Use async with a 15-minute timeout to survive RISC0 real-mode proving.
-        // Fire task_update on completion; return immediately with proving_started.
-        std::string task_ref_id = make_id("send_to");
-        std::string npk_copy   = npk;
-        std::string amount_copy = amount;
-        wallet.send_toAsync(
-            npk,
-            vpk,
-            amount,
-            [this, task_ref_id, npk_copy, amount_copy](std::string tx_hash) {
-                json res_j = safe_parse(tx_hash);
-                if (res_j.contains("error")) {
-                    skill_failed("wallet_send_to", res_j["error"].get<std::string>());
-                    task_update(task_ref_id,
-                        json{{"status","failed"},{"error",res_j["error"]}}.dump());
-                } else {
-                    record_spend(parse_amount(amount_copy));
-                    task_update(task_ref_id,
-                        json{{"status","completed"},{"tx_hash",tx_hash},
-                             {"npk",npk_copy},{"amount",amount_copy}}.dump());
-                }
-            }
-        );
-        return ok({{"status","proving_started"},{"task_id",task_ref_id},
-                   {"npk",npk},{"amount",amount},
-                   {"note","tx_hash arrives via task_update event when proof completes"}});
+        // Synchronous send through the wallet module. The sync binding is the one that
+        // actually delivers over the module RPC (the async variant never fires); under
+        // real proving the call can exceed the inter-module RPC window, but the wallet
+        // still settles the transfer and the new balance shows on the next sync.
+        std::string tx_hash = wallet.send_to(npk, vpk, amount);
+        json res_j = safe_parse(tx_hash);
+        if (res_j.is_object() && res_j.contains("error")) {
+            skill_failed("wallet_send_to", res_j["error"].get<std::string>());
+            return tx_hash; // passthrough error envelope
+        }
+        record_spend(parse_amount(amount));
+        task_update("send_to_" + tx_hash, json{{"status","completed"},{"tx_hash",tx_hash},{"npk",npk},{"amount",amount}}.dump());
+        return ok({{"tx_hash", tx_hash}, {"recipient_npk", npk}, {"amount", amount}});
     } catch (const std::exception& e) {
         skill_failed("wallet_send_to", e.what());
         return err(e.what());
@@ -948,11 +948,13 @@ std::string AgentModuleImpl::wallet_history() {
     ensure_loaded();
     try {
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string hist = wallet.history(int64_t(50));
-        // return ok(safe_parse(hist));
-
-        return ok(json::array());
+        std::string hist = wallet.history("50");
+        json j = safe_parse(hist);
+        if (j.is_object() && j.contains("error")) {
+            skill_failed("wallet_history", j["error"].get<std::string>());
+            return hist; // passthrough error envelope
+        }
+        return ok({{"history", j}});
     } catch (const std::exception& e) {
         skill_failed("wallet_history", e.what());
         return err(e.what());
@@ -966,20 +968,13 @@ std::string AgentModuleImpl::program_query(const std::string& program_id, const 
     ensure_loaded();
     try {
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string res = wallet.program_query(program_id, params);
-        // json j = safe_parse(res);
-        // if (j.contains("error")) {
-        //     skill_failed("program_query", j["error"].get<std::string>());
-        //     return res;
-        // }
-        // return ok(j);
-
-        return ok({
-            {"note",       "lez_wallet_module not yet bound"},
-            {"program_id", program_id},
-            {"params",     safe_parse(params)}
-        });
+        std::string res = wallet.program_query(program_id, params);
+        json j = safe_parse(res);
+        if (j.is_object() && j.contains("error")) {
+            skill_failed("program_query", j["error"].get<std::string>());
+            return res; // passthrough error envelope
+        }
+        return ok(j.is_object() ? j : json{{"result", j}});
     } catch (const std::exception& e) {
         skill_failed("program_query", e.what());
         return err(e.what());
@@ -1005,21 +1000,14 @@ std::string AgentModuleImpl::program_call(const std::string& program_id,
         }
 
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string res = wallet.program_call(program_id, instruction, params);
-        // json j = safe_parse(res);
-        // if (j.contains("error")) {
-        //     skill_failed("program_call", j["error"].get<std::string>());
-        //     return res;
-        // }
-        // if (parse_amount(amt) > 0.0) record_spend(parse_amount(amt));
-        // return ok(j);
-
-        return ok({
-            {"note",        "lez_wallet_module not yet bound"},
-            {"program_id",  program_id},
-            {"instruction", instruction}
-        });
+        std::string res = wallet.program_call(program_id, instruction, params);
+        json j = safe_parse(res);
+        if (j.is_object() && j.contains("error")) {
+            skill_failed("program_call", j["error"].get<std::string>());
+            return res; // passthrough error envelope
+        }
+        if (parse_amount(amt) > 0.0) record_spend(parse_amount(amt));
+        return ok(j.is_object() ? j : json{{"result", j}});
     } catch (const std::exception& e) {
         skill_failed("program_call", e.what());
         return err(e.what());
@@ -1041,19 +1029,13 @@ std::string AgentModuleImpl::program_deploy(const std::string& binary_path) {
         }
 
         BIND_LEZ_WALLET(wallet)
-        // TODO: verify API shape against logos-core source
-        // std::string res = wallet.program_deploy(binary_path);
-        // json j = safe_parse(res);
-        // if (j.contains("error")) {
-        //     skill_failed("program_deploy", j["error"].get<std::string>());
-        //     return res;
-        // }
-        // return ok(j);  // j should contain {"program_id": ...}
-
-        return ok({
-            {"note",        "lez_wallet_module not yet bound"},
-            {"binary_path", binary_path}
-        });
+        std::string res = wallet.program_deploy(binary_path);
+        json j = safe_parse(res);
+        if (j.is_object() && j.contains("error")) {
+            skill_failed("program_deploy", j["error"].get<std::string>());
+            return res; // passthrough error envelope
+        }
+        return ok(j.is_object() ? j : json{{"result", j}}); // j should contain {"program_id": ...}
     } catch (const std::exception& e) {
         skill_failed("program_deploy", e.what());
         return err(e.what());
@@ -1073,15 +1055,16 @@ std::string AgentModuleImpl::agent_card() {
     try {
         // Retrieve agent NPK (from lez_wallet if available, else config cache).
         std::string npk_val = impl_->cfg("agent_npk");
-        if (npk_val.empty()) {
+        std::string vpk_val = impl_->cfg("agent_vpk");
+        if (npk_val.empty() || vpk_val.empty()) {
             try {
                 BIND_LEZ_WALLET(wallet)
-                npk_val = wallet.npk();
-                if (!npk_val.empty()) {
-                    impl_->config["agent_npk"] = npk_val;
-                    impl_->save_config();
-                }
-            } catch (...) { npk_val = "npk_unavailable"; }
+                if (npk_val.empty()) npk_val = wallet.npk();
+                if (vpk_val.empty()) vpk_val = wallet.vpk();
+                if (!npk_val.empty()) impl_->config["agent_npk"] = npk_val;
+                if (!vpk_val.empty()) impl_->config["agent_vpk"] = vpk_val;
+                impl_->save_config();
+            } catch (...) { if (npk_val.empty()) npk_val = "npk_unavailable"; }
         }
 
         // Build Agent Card per A2A spec + LEZ extensions (ARCHITECTURE.md S8, LEARNING.md S9).
@@ -1118,6 +1101,7 @@ std::string AgentModuleImpl::agent_card() {
             // publish NPK in the card and use it as the primary routing identity.
             {"x-lez-identity", {
                 {"npk",        npk_val},
+                {"vpk",        vpk_val},
                 {"account_id", impl_->cfg("agent_account_id", "")}
             }},
             // Transport binding: A2A over Logos Messaging.
@@ -1360,7 +1344,7 @@ std::string AgentModuleImpl::agent_task(const std::string& agent_address,
             if (!pay_npk.empty() && !pay_vpk.empty()) {
                 std::string pay_result = wallet_send_to(pay_npk, pay_vpk, lez_price);
                 json pr = safe_parse(pay_result);
-                if (pr.contains("result") && pr["result"].contains("tx_hash")) {
+                if (pr.is_object() && pr.contains("result") && pr["result"].is_object() && pr["result"].contains("tx_hash")) {
                     pay_tx_hash = pr["result"]["tx_hash"].get<std::string>();
                 }
             }

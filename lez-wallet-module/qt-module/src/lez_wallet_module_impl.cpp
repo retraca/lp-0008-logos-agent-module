@@ -57,6 +57,11 @@ std::string LezWalletModuleImpl::npk() {
     return ffi_str(raw);
 }
 
+std::string LezWalletModuleImpl::vpk() {
+    char* raw = lez_wallet_vpk(agent_home_dir_impl(this).c_str(), kInternalPassphrase);
+    return ffi_str(raw);
+}
+
 // --- Balance and history ---
 
 std::string LezWalletModuleImpl::balance() {
@@ -125,18 +130,6 @@ std::string LezWalletModuleImpl::program_deploy(const std::string& binary_path) 
     return ffi_str(raw);
 }
 
-// --- Events (stubs; fired by the generated dispatch layer via emitEventImpl_) ---
-// The logos_events: declarations in the header mark these as events, not regular methods.
-// The generated dispatch.cpp calls these on the impl side so they must be defined;
-// however the emitting side (tx_settled/tx_failed notification) is done by the runtime.
+// Events (tx_settled / tx_failed) are emitted by the generated dispatch layer
+// from the logos_events declarations in the header; no impl-side definition needed.
 
-void LezWalletModuleImpl::tx_settled(const std::string& /*tx_hash*/, int64_t /*timestamp*/) {
-    // Called by the generated glue when the runtime fires the tx_settled event.
-    // No action needed here; the event is forwarded to subscribers by the Qt wrapper.
-}
-
-void LezWalletModuleImpl::tx_failed(const std::string& /*tx_hash*/,
-                                     const std::string& /*error*/,
-                                     int64_t /*timestamp*/) {
-    // Called by the generated glue when the runtime fires the tx_failed event.
-}

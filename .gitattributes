@@ -1,0 +1,2 @@
+lez-wallet-module/qt-module/corelib/*.a filter=lfs diff=lfs merge=lfs -text
+lez-wallet-module/qt-module/*.so filter=lfs diff=lfs merge=lfs -text

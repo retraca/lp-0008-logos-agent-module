@@ -321,6 +321,30 @@ pub async fn get_npk(home_dir: &Path, _passphrase: &str) -> Result<String, Provi
     Err(ProviderError::Wallet(anyhow::anyhow!("no private account found in wallet storage")))
 }
 
+/// Return the agent's ViewingPublicKey as a hex string (66 chars, compressed secp256k1).
+/// Needed so peers/owner can target the agent's shielded account in a foreign transfer.
+pub async fn get_vpk(home_dir: &Path, _passphrase: &str) -> Result<String, ProviderError> {
+    let paths = AgentPaths::new(home_dir);
+    let storage_bytes = std::fs::read(&paths.storage_path)?;
+    let storage: serde_json::Value = serde_json::from_slice(&storage_bytes)?;
+    if let Some(accounts) = storage.get("accounts").and_then(|v| v.as_array()) {
+        for entry in accounts {
+            if let Some(priv_data) = entry.get("Private") {
+                if let Some(data) = priv_data.get("data").and_then(|v| v.get("value")).and_then(|v| v.as_array()).and_then(|a| a.first()) {
+                    if let Some(vpk_arr) = data.get("viewing_public_key").and_then(|v| v.as_array()) {
+                        let vpk_bytes: Vec<u8> = vpk_arr.iter().filter_map(|v| v.as_u64().map(|b| b as u8)).collect();
+                        if !vpk_bytes.is_empty() {
+                            let hex: String = vpk_bytes.iter().fold(String::with_capacity(vpk_bytes.len()*2), |mut acc, b| { acc.push_str(&format!("{b:02x}")); acc });
+                            return Ok(hex);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Err(ProviderError::Wallet(anyhow::anyhow!("no viewing_public_key in wallet storage")))
+}
+
 /// Return the agent's shielded account balance as a decimal string (u128).
 ///
 /// For private (shielded) accounts the balance is tracked in local wallet storage

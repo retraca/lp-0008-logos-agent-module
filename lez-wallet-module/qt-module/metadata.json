@@ -16,11 +16,11 @@
   ],
   "nix": {
     "buildInputs": [],
-    "external_libraries": ["liblez_wallet_core"],
+    "external_libraries": [],
     "find_packages": [],
-    "extra_cmake_flags": [
-      "-DLEZ_WALLET_CORE_DIR=${LEZ_WALLET_CORE_DIR}"
-    ]
+    "extra_cmake_flags": []
   },
-  "_build_note": "Requires Nix + Qt6 + the compiled liblez_wallet_core from lez-wallet-core/target/release/. Set LEZ_WALLET_CORE_DIR=<path/to/lez-wallet-core/target/release> before nix develop / cmake. See BUILD.md."
+  "_build_note": "Requires Nix + Qt6 + the compiled liblez_wallet_core from lez-wallet-core/target/release/. Set LEZ_WALLET_CORE_DIR=<path/to/lez-wallet-core/target/release> before nix develop / cmake. See BUILD.md.",
+  "external_libraries": [],
+  "extra_cmake_flags": []
 }
