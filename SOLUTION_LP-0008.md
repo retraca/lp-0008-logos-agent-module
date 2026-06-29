@@ -8,7 +8,11 @@ shielded account, stores and retrieves files on Logos Storage, finds other agent
 Messaging using A2A Agent Cards, runs the A2A task lifecycle, and pays peers from its own funds
 within owner-set spending limits. The owner deploys it on a headless node with one command and
 reaches it from a separate Logos app over an end-to-end encrypted owner channel. Every proof in
-the demos is a real RISC0 STARK proof, `RISC0_DEV_MODE=0`. All 27 success criteria are met.
+the demos is a real RISC0 STARK proof, `RISC0_DEV_MODE=0`. Every functional criterion is verified
+end to end through the agent on a local LEZ sequencer (see `SUBMISSION.md`). Two items are
+constrained by the platform, not the implementation: the public testnet was reset and has no faucet,
+so F9/F10 are evidenced on a reproducible local devnet; and the Basecamp owner-console GUI (F4/U2)
+needs a local Basecamp build. The demo videos are silent screencasts pending the builder's voice-over.
 
 ## Repository
 
@@ -58,7 +62,9 @@ Key decisions and what did not work:
 
 ## Success Criteria Checklist
 
-Full per-criterion evidence is in `SUBMISSION.md` (27 DONE / 0 PARTIAL). In brief:
+Full per-criterion evidence is in `SUBMISSION.md`. The functional criteria are verified through the
+agent with real proofs; the testnet-reset (F9/F10) and Basecamp-GUI (F4/U2) constraints are noted
+there honestly. In brief:
 
 - **F1-F3:** module loads beside the platform modules unmodified (5 modules, 0 crashed); the
   agent owns and funds its own shielded account; `agent up` deploys and configures in one
@@ -108,10 +114,12 @@ runs the full flow with `RISC0_DEV_MODE=0`.
 
 ## Supporting Materials
 
-- **Demo video (full flow, narrated):** <PASTE YOUTUBE LINK HERE>
-  Silent source cuts in the repo: `docs/lp0008-f8-linux-demo.mp4` (comprehensive),
-  `docs/lp0008-uc-storage.mp4`, `docs/lp0008-uc-messaging.mp4`, `docs/lp0008-uc-blockchain.mp4`
-  (one per use case). Narration script: `docs/F8_LINUX_VIDEO_NARRATION.md`.
+- **Demo video (the agent's own skills, full flow):** `docs/lp0008-agent-demo.mp4` (62s) — deploy,
+  npk+vpk card, 21 skills, real-proof funding (`RISC0_DEV_MODE=0` visible), autonomous F8 payment.
+  Use-case cuts: `docs/lp0008-uc-storage.mp4`, `docs/lp0008-uc-messaging.mp4`,
+  `docs/lp0008-uc-blockchain.mp4`. **These are silent screencasts; the builder's narrated version
+  (which the prize requires) will be hosted here:** <PASTE YOUTUBE LINK HERE>. Narration scripts:
+  `docs/F8_LINUX_VIDEO_NARRATION.md`.
 - **Architecture + write-up:** `ARCHITECTURE.md`, `SUBMISSION.md`, `docs/SECURITY_MODEL.md`.
 - **A2A binding spec:** `docs/A2A_BINDING.md`. **Skill SDK:** `docs/SKILL_INTERFACE.md`.
 - **Evidence:** `docs/F8_LINUX_FULL_EVIDENCE.txt`, `docs/TESTNET_EVIDENCE.md`,

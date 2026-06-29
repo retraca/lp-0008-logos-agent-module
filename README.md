@@ -65,7 +65,7 @@ All evidence files are in `docs/`.
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
 | Real-proof e2e demo script | Yes | `tests/demo-real.sh` |
-| Demo videos (`RISC0_DEV_MODE=0` visible) | Yes; voice narration pending | `docs/lp0008-f8-linux-demo.mp4` (full flow, ~7 min) plus 3 use-case cuts (`lp0008-uc-storage.mp4`, `lp0008-uc-messaging.mp4`, `lp0008-uc-blockchain.mp4`), all live on Linux. Narration script: `docs/F8_LINUX_VIDEO_NARRATION.md` |
+| Demo videos (`RISC0_DEV_MODE=0` visible) | Yes; voice narration pending | **`docs/lp0008-agent-demo.mp4`** — the full flow through the agent's own skills (deploy, npk+vpk card, 21 skills, real-proof funding, autonomous F8 pay). Plus 3 use-case cuts (`lp0008-uc-{storage,messaging,blockchain}.mp4`). Silent screencasts; narration scripts in `docs/F8_LINUX_VIDEO_NARRATION.md`. |
 
 **Notes:**
 
@@ -213,7 +213,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |
 | Reproducible demo script, `RISC0_DEV_MODE=0` | DONE | `tests/demo-real.sh` |
-| Recorded video demo (terminal output, `RISC0_DEV_MODE=0`) | DONE; voice narration pending | `docs/lp0008-f8-linux-demo.mp4` plus 3 use-case cuts, all live; narration script `docs/F8_LINUX_VIDEO_NARRATION.md` |
+| Recorded video demo (terminal output, `RISC0_DEV_MODE=0`) | Silent cuts done; voice narration pending (builder) | `docs/lp0008-agent-demo.mp4` (the agent flow) + 3 use-case cuts; narration scripts `docs/F8_LINUX_VIDEO_NARRATION.md` |
 
 ---
 

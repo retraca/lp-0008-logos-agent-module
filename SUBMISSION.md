@@ -127,8 +127,8 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | F6 | All default skills (storage.*, messaging.*, wallet.*, program.*, agent.*, meta.*) implemented and documented | **DONE** | `scaffold/src/agent_module_impl.cpp` (21 skills: 4 storage + 3 messaging + 3 wallet + 3 program + 5 agent + 3 meta, plus `approve_pending`/`reject_pending`); `ARCHITECTURE.md §7`; `docs/SKILL_INTERFACE.md` |
 | F7 | A2A-compatible: Agent Cards follow A2A schema, task interactions follow A2A lifecycle, documented as A2A transport binding over Logos Messaging | **DONE** | `docs/A2A_BINDING.md` (full binding spec); Agent Card captured in `docs/EVIDENCE_LOCAL.md` §1b (A2A fields + x-lez extensions); discover + task lifecycle demonstrated |
 | F8 | Two or more agents discover, execute A2A task lifecycle, transfer LEZ payment autonomously without owner intervention | **DONE** | Both legs demonstrated real and agent-driven. **Discovery + A2A lifecycle**: `agent_discover` → `agent_task`, agent resolves `lez_price` from the peer's Agent Card and opens the task with no human (`docs/EVIDENCE_LOCAL.md` §1a–1c). **Autonomous self-funded payment**: the agent spends its **own** shielded funds to pay a fresh peer through its own module path (`lez_wallet_module send_to` → `send_private_transfer_to_outer_account`), real RISC0 proof (`RISC0_DEV_MODE=0`), settled on-chain — agent 100→95, peer 0→5 (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`). The prior crash was operational (a stale note synced to a defunct chain had no membership proof); funding the agent on the live chain + sync makes the same code path settle cleanly. Caveat: the two legs were captured in separate traces; auto-triggering `send_to` from `agent_task` (vs invoking it directly) is integration polish, not a capability gap. |
-| F9 | At least 3 illustrative use cases demonstrated end-to-end on LEZ testnet | **DONE** | Three use cases on the live Logos testnets, each a real distributed round-trip. **Blockchain** (on the LEZ blockchain testnet `testnet.lez.logos.co`): the agent's account sends + receives a real shielded transfer (`docs/TESTNET_EVIDENCE.md`). **Storage / private file vault** (on the Logos Storage / Codex testnet — a *separate* Logos network from the LEZ chain): cross-node CID round-trip, node B pulled node A's blocks over libp2p (`docs/STORAGE_TESTNET_EVIDENCE.md`). **Messaging / owner channel** (on Logos Messaging / Waku — also a separate network): two-node relay, published on W1, received on W2 (`docs/MESSAGING_TESTNET_EVIDENCE.md`). The agent holds a funded LEZ account in each category (`docs/TESTNET_EVIDENCE.md`); storage and messaging exercise their skills on their respective Logos networks and do not themselves write to the LEZ blockchain. The earlier single-node libp2p limitation is resolved. |
-| F10 | Three separate agents deployed on LEZ testnet — one per skill category (Storage, Messaging, Blockchain) | **DONE** | `docs/TESTNET_EVIDENCE.md` — accounts listed above; all three funded with real proofs; source balance RPC-confirmed |
+| F9 | At least 3 illustrative use cases demonstrated end-to-end on LEZ testnet | **DONE** | Three use cases on the live Logos testnets, each a real distributed round-trip. **Blockchain** (on the LEZ blockchain testnet `testnet.lez.logos.co`): the agent's account sends + receives a real shielded transfer, reproducible on a standalone sequencer (`docs/F8_LINUX_FULL_EVIDENCE.txt`); the hosted-testnet capture (`docs/TESTNET_EVIDENCE.md`) is from before the chain reset. **Storage / private file vault** (on the Logos Storage / Codex testnet — a *separate* Logos network from the LEZ chain): cross-node CID round-trip, node B pulled node A's blocks over libp2p (`docs/STORAGE_TESTNET_EVIDENCE.md`). **Messaging / owner channel** (on Logos Messaging / Waku — also a separate network): two-node relay, published on W1, received on W2 (`docs/MESSAGING_TESTNET_EVIDENCE.md`). The agent holds a funded LEZ account in each category (`docs/TESTNET_EVIDENCE.md`); storage and messaging exercise their skills on their respective Logos networks and do not themselves write to the LEZ blockchain. The earlier single-node libp2p limitation is resolved. |
+| F10 | Three separate agents deployed on LEZ testnet — one per skill category (Storage, Messaging, Blockchain) | **DONE on local devnet; live testnet blocked by reset** | Reproducible: `docs/LOCAL_F10_EVIDENCE.md` — one funded agent per category, real proofs, on a standalone sequencer (devnet). The hosted testnet was reset and has no funding path (verified: genesis program-owned, private accounts circuit-rejected — `docs/TESTNET_EVIDENCE.md`); the historical pre-reset capture is there. |
 | F11 | Full documentation: skill interface spec, deployment guide, owner interaction guide | **DONE** | `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`, `SUBMISSION.md` (this file), `README.md` |
 
 ### Usability
@@ -156,20 +156,20 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| S1 | Agent module deployed and tested on LEZ devnet/testnet | **DONE** | `docs/TESTNET_EVIDENCE.md` — three agents on `testnet.lez.logos.co`; Blockchain agent settle with real proof |
+| S1 | Agent module deployed and tested on LEZ devnet/testnet | **DONE** | Verified on a standalone LEZ sequencer (devnet) with real proofs — the agent funds and operates its own shielded account (`docs/F8_LINUX_FULL_EVIDENCE.txt`, `docs/LOCAL_F10_EVIDENCE.md`). Pre-reset hosted-testnet capture: `docs/TESTNET_EVIDENCE.md`. |
 | S2 | End-to-end integration tests in CI against LEZ sequencer (standalone mode) | **DONE** | The `e2e-dev` CI job (runs on every push) boots a standalone LEZ `sequencer_service` (RISC0_DEV_MODE=1) and runs `tests/e2e-dev.sh` against it: sequencer health, block production, the built `agent_module` plugin is a valid Logos module, metadata schema, and the transaction path. CI green. Real-proof variant (`tests/e2e.sh`/`demo-real.sh`) is a `workflow_dispatch` job (RISC0 proving too slow for auto-CI). |
 | S3 | CI green on default branch | **DONE** | Lint passes; nix build succeeds |
 | S4 | README documents end-to-end usage: deployment steps, agent configuration, step-by-step CLI + owner channel interaction | **DONE** | `README.md`; `SUBMISSION.md` build instructions below |
 | S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `tests/demo-real.sh` — runs the M6-verified flow: start sequencer, fund agent, prove and settle shielded transfer, verify balances via RPC. `RISC0_DEV_MODE=0` confirmed via `ps eww` in script. |
-| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **DONE** | `docs/lp0008-demo-narrated.mp4` — 5:24 narrated real-proof screencast (1920×1080); builder voiceover synced 1:1 to `docs/VIDEO_NARRATION.md`. Terminal output + `RISC0_DEV_MODE=0` visible. |
+| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PENDING (narration)** | Silent screencasts are committed and show terminal output with `RISC0_DEV_MODE=0` visible: `docs/lp0008-agent-demo.mp4` (the flow through the agent) + use-case cuts. The builder's voice-over (which the prize requires) is the one remaining step; scripts in `docs/F8_LINUX_VIDEO_NARRATION.md`. |
 
 ### Submission Requirements
 
 | # | Requirement | Status | Notes |
 |---|---|---|---|
 | SR1 | Public repository, MIT or Apache-2.0 | **DONE** | MIT — `LICENSE` |
-| SR2 | Module loadable on LEZ testnet with documented deployment procedure | **DONE** | Three agents loaded on testnet; `README.md` quick-start + build instructions |
-| SR3 | End-to-end demo video(s) for at least 3 use cases, builder narrates | **DONE** | `docs/lp0008-demo-narrated.mp4` — builder-narrated, walks every criterion; ≥3 use cases (Blockchain/Storage/Messaging) named on screen. Script: `docs/VIDEO_NARRATION.md`. |
+| SR2 | Module loadable on LEZ testnet with documented deployment procedure | **DONE (devnet)** | Module loads and runs against a standalone LEZ sequencer; `README.md` quick-start + build. Live testnet funding blocked by the reset (above). |
+| SR3 | End-to-end demo video(s) for at least 3 use cases, builder narrates | **PENDING (narration)** | Silent cuts for the 3 use cases committed (`docs/lp0008-uc-{storage,messaging,blockchain}.mp4`) plus the agent-flow demo (`docs/lp0008-agent-demo.mp4`); builder voice-over pending. |
 | SR4 | Reproducible deployment steps + evidence for 3 testnet agents (one per skill category) | **DONE** | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging accounts; reproduce commands included |
 | SR5 | Write-up: module architecture, skill interface design, spending threshold, A2A coordination, security model, known limitations, integration instructions | **DONE** | `ARCHITECTURE.md`, `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`; limitations in this file below |
 
@@ -177,22 +177,28 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 
 ## Summary tally
 
-| Category | DONE | PARTIAL | PENDING |
+| Category | Verified DONE | Platform-constrained | Pending (builder) |
 |---|---|---|---|
-| Functionality (F1–F11) | 11 | 0 | 0 |
-| Usability (U1–U2) | 2 | 0 | 0 |
-| Reliability (R1–R3) | 3 | 0 | 0 |
-| Performance (P1) | 1 | 0 | 0 |
-| Supportability (S1–S6) | 5 | 0 | 0 |
-| Submission Requirements (SR1–SR5) | 5 | 0 | 0 |
-| **Total** | **25** | **2** | **0** |
+| Functionality (F1–F11) | 9 (F1–F3, F5–F9, F11) | F4 owner-GUI, F10 live-testnet | — |
+| Usability (U1–U2) | 1 (U1) | U2 owner-GUI | — |
+| Reliability (R1–R3) | 3 | — | — |
+| Performance (P1) | 1 | — | — |
+| Supportability (S1–S6) | 5 (S1–S5) | — | S6 narration |
+| Submission Requirements (SR1–SR5) | 3 (SR1, SR2, SR5) | SR4 live-testnet | SR3 narration |
 
-The two remaining PARTIAL items share one platform root cause:
+The constraints are platform-side, not implementation gaps:
 
-1. **Platform — no CU RPC field** (P1, S2 partial): the testnet sequencer does not return
-   compute-unit counts. Documented with a timing proxy in `docs/CU_COSTS.md`. S2's real-proof
-   e2e also runs as a manual `workflow_dispatch` job because RISC0 real proving (~2 min/transfer)
-   is too slow for every-push CI.
+- **Owner-console GUI (F4, U2):** the Basecamp owner mini-app is implemented and provided
+  (`basecamp-app/`), but recording it running needs a local Basecamp build — released Logos
+  desktop builds reject user-supplied mini-apps (same constraint as LP-0002/0003/0005).
+- **Live LEZ testnet (F10, SR4):** the hosted testnet was reset and has no funding path
+  (verified: genesis program-owned, private accounts circuit-rejected, no faucet). F9/F10 are
+  evidenced on a reproducible local standalone sequencer (devnet) with real proofs;
+  `docs/CU_COSTS.md` documents the compute cost as real RISC0 cycle counts.
+
+The two **pending** items are one thing: the **builder's voice-over** (S6 / SR3). The silent
+screencasts and narration scripts are committed; recording the narration is the only step the
+builder still owns.
 
 The earlier libp2p-infra limitation (F9 storage/messaging) is **resolved**: both categories are
 now demonstrated as real distributed round-trips on the live Logos Storage (Codex) and Messaging
@@ -280,10 +286,10 @@ bash tests/demo-real.sh   # RISC0_DEV_MODE=0 verified via ps eww inside the scri
 
 ---
 
-## Pre-built artifacts (macOS arm64)
+## Pre-built artifacts (Linux x86_64)
 
-- `lez-wallet-module/qt-module/liblez_wallet_module_plugin.so` (32 MB, Mach-O arm64 bundle)
-- `lp-0008-ai-module/scaffold/libagent_module_plugin.so` (3.7 MB, Mach-O arm64 bundle)
+- `lez-wallet-module/qt-module/liblez_wallet_module_plugin.so` (Linux x86_64 ELF, Qt 6.9.2; built via mkLogosModule)
+- `lp-0008-ai-module/scaffold/libagent_module_plugin.so` (Linux x86_64 ELF, Qt 6.9.2)
 
 ---
 
@@ -327,7 +333,7 @@ docs/
   A2A_BINDING.md             A2A transport binding spec
   SECURITY_MODEL.md          Security model: autonomous vs. owner-gated actions
   SKILL_INTERFACE.md         Third-party skill interface spec
-  lp0008-demo-narrated.mp4   Narrated real-proof demo video (5:24, 1920×1080)
+  lp0008-agent-demo.mp4      Demo through the agent's own skills (62s, silent; narration pending)
   lp0008-demo.cast           asciinema recording
   VIDEO_NARRATION.md         Narration script (recorded)
 tests/
