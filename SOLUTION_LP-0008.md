@@ -119,7 +119,7 @@ runs the full flow with `RISC0_DEV_MODE=0`.
   Use-case cuts: `docs/lp0008-uc-storage.mp4`, `docs/lp0008-uc-messaging.mp4`,
   `docs/lp0008-uc-blockchain.mp4`. **These are silent screencasts; the builder's narrated version
   (which the prize requires) will be hosted here:** <PASTE YOUTUBE LINK HERE>. Narration scripts:
-  `docs/F8_LINUX_VIDEO_NARRATION.md`.
+  `docs/VIDEO_NARRATION.md`.
 - **Architecture + write-up:** `ARCHITECTURE.md`, `SUBMISSION.md`, `docs/SECURITY_MODEL.md`.
 - **A2A binding spec:** `docs/A2A_BINDING.md`. **Skill SDK:** `docs/SKILL_INTERFACE.md`.
 - **Evidence:** `docs/F8_LINUX_FULL_EVIDENCE.txt`, `docs/TESTNET_EVIDENCE.md`,

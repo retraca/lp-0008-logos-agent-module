@@ -161,7 +161,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | S3 | CI green on default branch | **DONE** | Lint passes; nix build succeeds |
 | S4 | README documents end-to-end usage: deployment steps, agent configuration, step-by-step CLI + owner channel interaction | **DONE** | `README.md`; `SUBMISSION.md` build instructions below |
 | S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `tests/demo-real.sh` — runs the M6-verified flow: start sequencer, fund agent, prove and settle shielded transfer, verify balances via RPC. `RISC0_DEV_MODE=0` confirmed via `ps eww` in script. |
-| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PENDING (narration)** | Silent screencasts are committed and show terminal output with `RISC0_DEV_MODE=0` visible: `docs/lp0008-agent-demo.mp4` (the flow through the agent) + use-case cuts. The builder's voice-over (which the prize requires) is the one remaining step; scripts in `docs/F8_LINUX_VIDEO_NARRATION.md`. |
+| S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PENDING (narration)** | Silent screencasts are committed and show terminal output with `RISC0_DEV_MODE=0` visible: `docs/lp0008-agent-demo.mp4` (the flow through the agent) + use-case cuts. The builder's voice-over (which the prize requires) is the one remaining step; scripts in `docs/VIDEO_NARRATION.md`. |
 
 ### Submission Requirements
 

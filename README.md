@@ -65,7 +65,7 @@ All evidence files are in `docs/`.
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
 | Real-proof e2e demo script | Yes | `tests/demo-real.sh` |
-| Demo videos (`RISC0_DEV_MODE=0` visible) | Yes; voice narration pending | **`docs/lp0008-agent-demo.mp4`** — the full flow through the agent's own skills (deploy, npk+vpk card, 21 skills, real-proof funding, autonomous F8 pay). Plus 3 use-case cuts (`lp0008-uc-{storage,messaging,blockchain}.mp4`). Silent screencasts; narration scripts in `docs/F8_LINUX_VIDEO_NARRATION.md`. |
+| Demo videos (`RISC0_DEV_MODE=0` visible) | Yes; voice narration pending | **`docs/lp0008-agent-demo.mp4`** — the full flow through the agent's own skills (deploy, npk+vpk card, 21 skills, real-proof funding, autonomous F8 pay). Plus 3 use-case cuts (`lp0008-uc-{storage,messaging,blockchain}.mp4`). Silent screencasts; narration scripts in `docs/VIDEO_NARRATION.md`. |
 
 **Notes:**
 
@@ -168,13 +168,14 @@ See `tests/README.md` for what each step asserts.
 | [docs/EVIDENCE_LOCAL.md](docs/EVIDENCE_LOCAL.md) | M6 local evidence: 6/6 modules loaded; A2A flow; real-proof payment settled (tx `96724ec5`) |
 | [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md) | Hosted testnet evidence: 3 agents created + funded; Blockchain agent send settled (nullifier `43d571cf`) |
 | [docs/CU_COSTS.md](docs/CU_COSTS.md) | CU cost documentation and platform limitation (no RPC CU field); timing proxy |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Full deployment guide: prerequisites, build, load, configure |
 | [SUBMISSION.md](SUBMISSION.md) | Full success-criteria checklist with per-item evidence and gap mapping |
 
 ---
 
 ## Testnet agent accounts
 
-Three agents deployed on `https://testnet.lez.logos.co` (real proofs, `RISC0_DEV_MODE=0`):
+Three agents were deployed on `https://testnet.lez.logos.co` **pre-reset** (real proofs, `RISC0_DEV_MODE=0`). **The hosted chain has since been reset; the accounts below no longer resolve on the current chain.** The reproducible-today equivalent is the local per-category deploy in `docs/LOCAL_F10_EVIDENCE.md`. Historical on-chain accounts:
 
 | Agent | Account ID | Funded |
 |---|---|---|
@@ -182,7 +183,7 @@ Three agents deployed on `https://testnet.lez.logos.co` (real proofs, `RISC0_DEV
 | Storage | `Private/3oTB2ZaJzWUoMEJfbA8nWYLxa88RXBHkQyWNevyD5viC` | 100 LEZ |
 | Messaging | `Private/G5UwwQLM6eRmXkYKUXTtJzpWtQMEsYPeLCvqEcZCaVNj` | 100 LEZ |
 
-Funding source confirmed RPC-side: `Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV`
+Funding source (pre-reset), confirmed RPC-side: `Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV`
 balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 
 ---
@@ -199,8 +200,8 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | All 21 default skills implemented + documented | DONE | `scaffold/src/agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
 | A2A-compatible: Agent Card, task lifecycle, transport binding documented | DONE | `docs/A2A_BINDING.md` |
 | Two agents discover + task + pay LEZ autonomously | DONE | Verified live on Linux: `peer_count=1`, A2A task opened, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5). `docs/lp0008-f8-linux-demo.mp4`, `docs/F8_LINUX_FULL_EVIDENCE.txt` |
-| 3 illustrative use cases on testnet | DONE | Blockchain settle on LEZ testnet; Storage cross-node CID round-trip on Codex testnet; Messaging two-node Waku relay (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`) |
-| 3 testnet agents (one per skill category) | DONE | one agent per category, reproducible: `docs/LOCAL_F10_EVIDENCE.md`. Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
+| 3 illustrative use cases end-to-end | PARTIAL | Storage (cross-node CID round-trip, Codex testnet) + Messaging (two-node Waku relay) are on live infra; Blockchain settle was on the LEZ testnet pre-reset and is reproducible today on a local standalone sequencer (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`, `docs/LOCAL_F10_EVIDENCE.md`) |
+| 3 agents (one per skill category) deployed | PARTIAL | Reproducible today per-category on a local standalone sequencer (`docs/LOCAL_F10_EVIDENCE.md`). Live-testnet copies were deployed + funded pre-reset (`docs/TESTNET_EVIDENCE.md`); a live re-deploy is pending a confirmed funding path on the reset chain. |
 | Full documentation | DONE | `docs/` |
 | Third-party skill interface (ISkill) | DONE | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` |
 | Owner interface from Basecamp | DONE | `basecamp-app/`; owner channel verified |
@@ -208,12 +209,12 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | Above-threshold tx not executed if owner unreachable | DONE | Retry-then-fail — `docs/SECURITY_MODEL.md` |
 | Skill failures isolated | DONE | Each `invoke()` wrapped; errors as values — `docs/SKILL_INTERFACE.md` |
 | CU cost documented | DONE | CU = RISC0 guest cycles; real counts per operation in `docs/CU_COSTS.md` (393,216 total / ~262,500 user cycles per shielded transfer) |
-| Module deployed + tested on testnet | DONE | 3 agents on `testnet.lez.logos.co` with settled proofs |
+| Module deployed + tested on testnet | PARTIAL | Deployed + funded on the hosted testnet pre-reset with real proofs (`docs/TESTNET_EVIDENCE.md`); the chain has since been reset, so reproducible-today evidence is the local standalone sequencer. Live re-deploy pending a confirmed funding path on the reset chain. |
 | E2E integration tests in CI | DONE | `e2e-dev` job runs on every push against a standalone LEZ sequencer (`tests/e2e-dev.sh`): health, block production, plugin validity, tx path |
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |
 | Reproducible demo script, `RISC0_DEV_MODE=0` | DONE | `tests/demo-real.sh` |
-| Recorded video demo (terminal output, `RISC0_DEV_MODE=0`) | Silent cuts done; voice narration pending (builder) | `docs/lp0008-agent-demo.mp4` (the agent flow) + 3 use-case cuts; narration scripts `docs/F8_LINUX_VIDEO_NARRATION.md` |
+| Recorded video demo (terminal output, `RISC0_DEV_MODE=0`) | Silent cuts done; voice narration pending (builder) | `docs/lp0008-agent-demo.mp4` (the agent flow) + 3 use-case cuts; narration scripts `docs/VIDEO_NARRATION.md` |
 
 ---
 
