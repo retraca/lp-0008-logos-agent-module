@@ -59,8 +59,8 @@ All evidence files are in `docs/`.
 | A2A: autonomous discover → price-resolution → task-open loop (agent-driven) | Yes | `docs/EVIDENCE_LOCAL.md` §1a–1c |
 | F8 full flow on Linux: two agents discover, run the A2A task, pay autonomously | Yes | `docs/lp0008-f8-linux-demo.mp4` and `docs/F8_LINUX_FULL_EVIDENCE.txt`: peer_count=1, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5), `RISC0_DEV_MODE=0` |
 | Owner cross-instance channel | Yes | `docs/EVIDENCE_LOCAL.md` §3 — 2nd logoscore client over owner token |
-| Three testnet agents created + funded with native LEZ (real proofs) | Yes | reproducible local per-category: `docs/LOCAL_F10_EVIDENCE.md` (one agent each for storage/messaging/blockchain). Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
-| Blockchain agent outbound shielded transfer settled on testnet | Yes | reproducible local real-proof: agent pays a discovered peer (real proof, settled) in `docs/lp0008-f8-linux-demo.mp4`. Historical testnet: `docs/TESTNET_EVIDENCE.md` (since reset) |
+| Three testnet agents created + funded with native LEZ (real proofs) | Yes | reproducible local per-category: `docs/LOCAL_F10_EVIDENCE.md` (one agent each for storage/messaging/blockchain). Live LEZ v0.2.0 testnet: `docs/TESTNET_EVIDENCE_V020.md` (3 shielded agents funded, tx RPC-confirmed) |
+| Blockchain agent outbound shielded transfer settled on testnet | Yes | reproducible local real-proof: agent pays a discovered peer (real proof, settled) in `docs/lp0008-f8-linux-demo.mp4`. Live LEZ v0.2.0 testnet: `docs/TESTNET_EVIDENCE_V020.md` (3 shielded agents funded, tx RPC-confirmed) |
 | Single-command deploy (`agent up`) | Yes | `agent-cli/` |
 | Basecamp owner mini-app | Yes | `basecamp-app/` |
 | CI lint passes; nix build | Yes | `.github/workflows/ci.yml` |
@@ -166,7 +166,8 @@ See `tests/README.md` for what each step asserts.
 | [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) | What the agent can/cannot do without owner approval; key model; threat surface |
 | [docs/A2A_BINDING.md](docs/A2A_BINDING.md) | A2A transport binding over Logos Messaging; Agent Card schema; task lifecycle; payment model |
 | [docs/EVIDENCE_LOCAL.md](docs/EVIDENCE_LOCAL.md) | M6 local evidence: 6/6 modules loaded; A2A flow; real-proof payment settled (tx `96724ec5`) |
-| [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md) | Hosted testnet evidence: 3 agents created + funded; Blockchain agent send settled (nullifier `43d571cf`) |
+| [docs/TESTNET_EVIDENCE_V020.md](docs/TESTNET_EVIDENCE_V020.md) | **Live LEZ v0.2.0 testnet (current):** 3 shielded agents funded + shielded agent→peer payment, all tx RPC-confirmed |
+| [docs/TESTNET_EVIDENCE.md](docs/TESTNET_EVIDENCE.md) | Earlier hosted testnet capture: 3 agents created + funded; Blockchain agent send settled (nullifier `43d571cf`) |
 | [docs/CU_COSTS.md](docs/CU_COSTS.md) | CU cost documentation and platform limitation (no RPC CU field); timing proxy |
 | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Full deployment guide: prerequisites, build, load, configure |
 | [SUBMISSION.md](SUBMISSION.md) | Full success-criteria checklist with per-item evidence and gap mapping |
@@ -175,16 +176,19 @@ See `tests/README.md` for what each step asserts.
 
 ## Testnet agent accounts
 
-Three agents were deployed on `https://testnet.lez.logos.co` **pre-reset** (real proofs, `RISC0_DEV_MODE=0`). **The hosted chain has since been reset; the accounts below no longer resolve on the current chain.** The reproducible-today equivalent is the local per-category deploy in `docs/LOCAL_F10_EVIDENCE.md`. Historical on-chain accounts:
+Three agents deployed on the live `https://testnet.lez.logos.co` (LEZ `v0.2.0`, real proofs,
+`RISC0_DEV_MODE=0`, 2026-07-02). Each holds its own **shielded** account, funded from genesis;
+every tx below is confirmed via `getTransaction`. Full detail: [`docs/TESTNET_EVIDENCE_V020.md`](docs/TESTNET_EVIDENCE_V020.md).
 
-| Agent | Account ID | Funded |
-|---|---|---|
-| Blockchain | `Private/a48YnmT2vxNE1hVMvcu8VAUTRaoveKdDHXj9q57GoqD` | 200 LEZ |
-| Storage | `Private/3oTB2ZaJzWUoMEJfbA8nWYLxa88RXBHkQyWNevyD5viC` | 100 LEZ |
-| Messaging | `Private/G5UwwQLM6eRmXkYKUXTtJzpWtQMEsYPeLCvqEcZCaVNj` | 100 LEZ |
+| Agent | Shielded account | Funded | Funding tx (on-chain ✓) |
+|---|---|---|---|
+| Blockchain | `Private/g4zEiJNJDUWfAMC676xgfX6GSNKhY8dZ98mMjW4Qou2` | 100 LEZ | `d02ccbd1c98da606…` |
+| Storage | `Private/3bxcGTCZ4kHVcGbzK5fh8QbGYaSoRDrBGYuL47uTHwUj` | 100 LEZ | `7eeb53e0fd8b8ce3…` |
+| Messaging | `Private/H8g2yrEcMYp8jn35717GwbXdkSML7YU1gPk74s7b8USU` | 100 LEZ | `ba428afdbf0467ab…` |
 
-Funding source (pre-reset), confirmed RPC-side: `Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV`
-balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
+Funding source, confirmed RPC-side: `Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV`
+balance 9998 → 9698, nonce 2 → 5 (three transfers). The Blockchain agent then paid a peer 30 LEZ
+from its own shielded funds (tx `7133cbd112a7b860…`, balance 100 → 70).
 
 ---
 
@@ -200,8 +204,8 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | All 21 default skills implemented + documented | DONE | `scaffold/src/agent_module_impl.cpp`; `ARCHITECTURE.md §7` |
 | A2A-compatible: Agent Card, task lifecycle, transport binding documented | DONE | `docs/A2A_BINDING.md` |
 | Two agents discover + task + pay LEZ autonomously | DONE | Verified live on Linux: `peer_count=1`, A2A task opened, agent pays the discovered peer with a real proof (agent 100->95, peer 0->5). `docs/lp0008-f8-linux-demo.mp4`, `docs/F8_LINUX_FULL_EVIDENCE.txt` |
-| 3 illustrative use cases end-to-end | PARTIAL | Storage (cross-node CID round-trip, Codex testnet) + Messaging (two-node Waku relay) are on live infra; Blockchain settle was on the LEZ testnet pre-reset and is reproducible today on a local standalone sequencer (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`, `docs/LOCAL_F10_EVIDENCE.md`) |
-| 3 agents (one per skill category) deployed | PARTIAL | Reproducible today per-category on a local standalone sequencer (`docs/LOCAL_F10_EVIDENCE.md`). Live-testnet copies were deployed + funded pre-reset (`docs/TESTNET_EVIDENCE.md`); a live re-deploy is pending a confirmed funding path on the reset chain. |
+| 3 illustrative use cases end-to-end | DONE | Blockchain: shielded agent pays a peer on live LEZ `v0.2.0` testnet (`docs/TESTNET_EVIDENCE_V020.md`); Storage: cross-node CID round-trip on Codex testnet; Messaging: two-node Waku relay (`docs/STORAGE_TESTNET_EVIDENCE.md`, `docs/MESSAGING_TESTNET_EVIDENCE.md`) |
+| 3 agents (one per skill category) deployed | DONE | Three shielded agents (Blockchain/Storage/Messaging) funded on live LEZ `v0.2.0` testnet, real proofs, tx hashes RPC-confirmed — `docs/TESTNET_EVIDENCE_V020.md`. Also reproducible per-category on a local standalone sequencer (`docs/LOCAL_F10_EVIDENCE.md`). |
 | Full documentation | DONE | `docs/` |
 | Third-party skill interface (ISkill) | DONE | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` |
 | Owner interface from Basecamp | DONE | `basecamp-app/`; owner channel verified |
@@ -209,7 +213,7 @@ balance 4048 → 3648, nonce 38 (three transfers consumed nonces 35–37).
 | Above-threshold tx not executed if owner unreachable | DONE | Retry-then-fail — `docs/SECURITY_MODEL.md` |
 | Skill failures isolated | DONE | Each `invoke()` wrapped; errors as values — `docs/SKILL_INTERFACE.md` |
 | CU cost documented | DONE | CU = RISC0 guest cycles; real counts per operation in `docs/CU_COSTS.md` (393,216 total / ~262,500 user cycles per shielded transfer) |
-| Module deployed + tested on testnet | PARTIAL | Deployed + funded on the hosted testnet pre-reset with real proofs (`docs/TESTNET_EVIDENCE.md`); the chain has since been reset, so reproducible-today evidence is the local standalone sequencer. Live re-deploy pending a confirmed funding path on the reset chain. |
+| Module deployed + tested on testnet | DONE | Wallet built from LEZ `v0.2.0` (matches the hosted chain — `check-health` ✅); three shielded agents funded + a shielded agent→peer payment on live `testnet.lez.logos.co`, all real proofs, tx hashes RPC-confirmed — `docs/TESTNET_EVIDENCE_V020.md` |
 | E2E integration tests in CI | DONE | `e2e-dev` job runs on every push against a standalone LEZ sequencer (`tests/e2e-dev.sh`): health, block production, plugin validity, tx path |
 | CI green on default branch | DONE | Lint passes; build via nix |
 | README documents end-to-end usage | DONE | This file + `SUBMISSION.md` |

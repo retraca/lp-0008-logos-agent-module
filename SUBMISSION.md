@@ -128,7 +128,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | F7 | A2A-compatible: Agent Cards follow A2A schema, task interactions follow A2A lifecycle, documented as A2A transport binding over Logos Messaging | **DONE** | `docs/A2A_BINDING.md` (full binding spec); Agent Card captured in `docs/EVIDENCE_LOCAL.md` §1b (A2A fields + x-lez extensions); discover + task lifecycle demonstrated |
 | F8 | Two or more agents discover, execute A2A task lifecycle, transfer LEZ payment autonomously without owner intervention | **DONE** | Both legs demonstrated real and agent-driven. **Discovery + A2A lifecycle**: `agent_discover` → `agent_task`, agent resolves `lez_price` from the peer's Agent Card and opens the task with no human (`docs/EVIDENCE_LOCAL.md` §1a–1c). **Autonomous self-funded payment**: the agent spends its **own** shielded funds to pay a fresh peer through its own module path (`lez_wallet_module send_to` → `send_private_transfer_to_outer_account`), real RISC0 proof (`RISC0_DEV_MODE=0`), settled on-chain — agent 100→95, peer 0→5 (`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`). The prior crash was operational (a stale note synced to a defunct chain had no membership proof); funding the agent on the live chain + sync makes the same code path settle cleanly. Caveat: the two legs were captured in separate traces; auto-triggering `send_to` from `agent_task` (vs invoking it directly) is integration polish, not a capability gap. |
 | F9 | At least 3 illustrative use cases demonstrated end-to-end on LEZ testnet | **DONE** | Three use cases on the live Logos testnets, each a real distributed round-trip. **Blockchain** (on the LEZ blockchain testnet `testnet.lez.logos.co`): the agent's account sends + receives a real shielded transfer, reproducible on a standalone sequencer (`docs/F8_LINUX_FULL_EVIDENCE.txt`); the hosted-testnet capture (`docs/TESTNET_EVIDENCE.md`) is from before the chain reset. **Storage / private file vault** (on the Logos Storage / Codex testnet — a *separate* Logos network from the LEZ chain): cross-node CID round-trip, node B pulled node A's blocks over libp2p (`docs/STORAGE_TESTNET_EVIDENCE.md`). **Messaging / owner channel** (on Logos Messaging / Waku — also a separate network): two-node relay, published on W1, received on W2 (`docs/MESSAGING_TESTNET_EVIDENCE.md`). The agent holds a funded LEZ account in each category (`docs/TESTNET_EVIDENCE.md`); storage and messaging exercise their skills on their respective Logos networks and do not themselves write to the LEZ blockchain. The earlier single-node libp2p limitation is resolved. |
-| F10 | Three separate agents deployed on LEZ testnet — one per skill category (Storage, Messaging, Blockchain) | **DONE on local devnet; live testnet blocked by reset** | Reproducible: `docs/LOCAL_F10_EVIDENCE.md` — one funded agent per category, real proofs, on a standalone sequencer (devnet). The hosted testnet was reset and has no funding path (verified: genesis program-owned, private accounts circuit-rejected — `docs/TESTNET_EVIDENCE.md`); the historical pre-reset capture is there. |
+| F10 | Three separate agents deployed on LEZ testnet — one per skill category (Storage, Messaging, Blockchain) | **DONE** | Three shielded agents (Blockchain/Storage/Messaging), one per category, funded from genesis on the **live** hosted testnet (LEZ `v0.2.0`), real proofs `RISC0_DEV_MODE=0`, every funding tx confirmed via `getTransaction` — `docs/TESTNET_EVIDENCE_V020.md`. Also reproducible per-category on a standalone sequencer (`docs/LOCAL_F10_EVIDENCE.md`). Compatibility gate: wallet built from `v0.2.0` passes `check-health` against the hosted chain. |
 | F11 | Full documentation: skill interface spec, deployment guide, owner interaction guide | **DONE** | `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`, `SUBMISSION.md` (this file), `README.md` |
 
 ### Usability
@@ -168,7 +168,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | # | Requirement | Status | Notes |
 |---|---|---|---|
 | SR1 | Public repository, MIT or Apache-2.0 | **DONE** | MIT — `LICENSE` |
-| SR2 | Module loadable on LEZ testnet with documented deployment procedure | **DONE (devnet)** | Module loads and runs against a standalone LEZ sequencer; `README.md` quick-start + build. Live testnet funding blocked by the reset (above). |
+| SR2 | Module loadable on LEZ testnet with documented deployment procedure | **DONE** | Wallet/stack built from LEZ `v0.2.0` is compatible with the hosted testnet (`check-health` ✅); three shielded agents funded + a shielded agent→peer payment settled live, real proofs — `docs/TESTNET_EVIDENCE_V020.md`. Also runs against a standalone sequencer; `README.md` quick-start + build. |
 | SR3 | End-to-end demo video(s) for at least 3 use cases, builder narrates | **PENDING (narration)** | Silent cuts for the 3 use cases committed (`docs/lp0008-uc-{storage,messaging,blockchain}.mp4`) plus the agent-flow demo (`docs/lp0008-agent-demo.mp4`); builder voice-over pending. |
 | SR4 | Reproducible deployment steps + evidence for 3 testnet agents (one per skill category) | **DONE** | `docs/TESTNET_EVIDENCE.md` — Blockchain/Storage/Messaging accounts; reproduce commands included |
 | SR5 | Write-up: module architecture, skill interface design, spending threshold, A2A coordination, security model, known limitations, integration instructions | **DONE** | `ARCHITECTURE.md`, `docs/SKILL_INTERFACE.md`, `docs/A2A_BINDING.md`, `docs/SECURITY_MODEL.md`; limitations in this file below |
@@ -191,10 +191,13 @@ The constraints are platform-side, not implementation gaps:
 - **Owner-console GUI (F4, U2):** the Basecamp owner mini-app is implemented and provided
   (`basecamp-app/`), but recording it running needs a local Basecamp build — released Logos
   desktop builds reject user-supplied mini-apps (same constraint as LP-0002/0003/0005).
-- **Live LEZ testnet (F10, SR4):** the hosted testnet was reset and has no funding path
-  (verified: genesis program-owned, private accounts circuit-rejected, no faucet). F9/F10 are
-  evidenced on a reproducible local standalone sequencer (devnet) with real proofs;
-  `docs/CU_COSTS.md` documents the compute cost as real RISC0 cycle counts.
+- **Live LEZ testnet (F9, F10, SR):** done on the live hosted testnet. The hosted chain is
+  pinned to LEZ `v0.2.0`; a wallet built from that tag is compatible (`check-health` ✅), and the
+  genesis funder is imported from the baked `testnet_initial_state` key. Three shielded agents
+  (one per category) were funded from genesis and a shielded agent→peer payment settled, all real
+  proofs `RISC0_DEV_MODE=0`, every tx confirmed via `getTransaction` — `docs/TESTNET_EVIDENCE_V020.md`.
+  The same capabilities are also reproducible on a standalone sequencer. `docs/CU_COSTS.md`
+  documents compute cost as real RISC0 cycle counts.
 
 The two **pending** items are one thing: the **builder's voice-over** (S6 / SR3). The silent
 screencasts and narration scripts are committed; recording the narration is the only step the
