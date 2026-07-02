@@ -1,13 +1,20 @@
 #!/usr/bin/env bash
-# tests/demo-real.sh — LP-0008 reproducible real-proof end-to-end demo.
+# tests/demo-real.sh — LP-0008 LOCAL structural demo (real proofs, RISC0_DEV_MODE=0).
 #
-# Self-bootstrapping: starts its own LEZ sequencer + logoscore daemon, loads the
-# platform + agent modules, funds the agent on the live chain, and has the agent
-# pay a fresh peer from its OWN shielded account with a REAL RISC0 proof
-# (RISC0_DEV_MODE=0). No pre-running daemon and no pre-funded account required.
+# Self-bootstrapping: starts its own standalone LEZ sequencer + logoscore daemon, loads
+# the platform + agent modules, and creates the agent's own shielded account — all with
+# RISC0_DEV_MODE=0. It then attempts to fund + pay locally and reports honestly.
 #
-# Criteria exercised: F1 (modules load), F2 (agent's own shielded account),
-# F8 (autonomous agent-to-peer payment), S5 (reproducible real-proof demo).
+# IMPORTANT: a single standalone sequencer binary cannot fund from genesis — LEZ's
+# authenticated-transfer requires the genesis account to be owned by the auth-transfer
+# program, which is set up by the full multi-service stack (sequencer + indexer) or by the
+# hosted testnet, not by a lone sequencer. So the FUNDED end-to-end run (agent funded +
+# balance read back through its own skill) is reproduced by tests/demo-testnet.sh against
+# the live testnet (verified, tx getTransaction-confirmed — docs/TESTNET_EVIDENCE_V020.md).
+# This script exits NON-ZERO if the local funding step cannot settle (never a false pass).
+#
+# Criteria exercised locally: F1 (modules load), F2 (the agent's own shielded account).
+# Funded F2/F8 with real proofs: tests/demo-testnet.sh.
 #
 # Binaries are taken from the environment with sensible defaults so the script
 # runs from a clean clone after building the LEZ stack (see README "Build").

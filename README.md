@@ -134,33 +134,42 @@ logoscore call agent_module meta_status
 **Prerequisite — build the stack once (from a clean clone):**
 
 ```bash
-# Builds the LEZ sequencer+wallet (pinned commit matching the module bundles) + the modules,
+# Builds the LEZ sequencer+wallet (v0.2.0, matching the hosted testnet) + the module bundles,
 # then assembles ./runtime-modules. Needs nix + a Rust/risc0 toolchain + logoscore on PATH.
 bash scripts/setup.sh
 ```
 
-Then run the real-proof demo:
+### Primary real-proof demo — funded end-to-end on the LIVE testnet
 
 ```bash
-# Lint + build (CI)
-nix flake check
-
-# Real-proof end-to-end demo — self-bootstrapping (starts its own sequencer + daemon).
-# setup.sh prints the LEZ_BUILD / MODULES_DIR to pass; defaults are auto-detected.
-LEZ_BUILD=~/logos-execution-zone MODULES_DIR=./runtime-modules bash tests/demo-real.sh
+LEZ_BUILD=~/logos-execution-zone MODULES_DIR=./runtime-modules bash tests/demo-testnet.sh
 ```
 
-`tests/demo-real.sh` starts its own LEZ sequencer + logoscore daemon, loads the platform + agent
-modules (F1), creates the agent's own shielded account (F2), funds it on the live chain, and has
-the agent pay a fresh peer from its own funds with a **real RISC0 proof** (F8) — all with
-`RISC0_DEV_MODE=0`. It **exits non-zero** if the real-proof payment does not settle, so a passing
-run is never a false claim. Override `LOGOSCORE_BIN`, `LEZ_BUILD`, `MODULES_DIR`, `SEQ_CONFIG`,
-`SEQ_PORT` for your layout. The settled payment (agent 100→95, peer 0→5) is also recorded in
-`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`. See `tests/README.md` for what each step asserts.
+`tests/demo-testnet.sh` is verified end-to-end (`RISC0_DEV_MODE=0`): it loads all six modules
+(F1), has the agent create its own shielded account whose A2A card carries the full identity
+(F2), funds it 100 LEZ from genesis on the live testnet with a **real RISC0 proof**, confirms the
+tx via the sequencer's `getTransaction` RPC, and reads the agent's `balance: 100` back **through
+its own module skill**. It exits non-zero unless the funding tx confirms on-chain — never a false
+pass. Sample run: funding tx `76b1337de16b8a…`, confirmed on `testnet.lez.logos.co`
+(see `docs/TESTNET_EVIDENCE_V020.md`).
 
-> `tests/e2e.sh` is a **template** for a fully-scripted multi-agent run and requires configured
-> account constants; the runnable real-proof path is `tests/demo-real.sh` (above), and the
-> CI integration test is `tests/e2e-dev.sh` (standalone sequencer, runs on every push).
+### Local structural demo (standalone sequencer)
+
+```bash
+nix flake check   # lint + build
+LEZ_BUILD=~/logos-execution-zone MODULES_DIR=./runtime-modules \
+  SEQ_CONFIG=./tests/lez-seq-config.json bash tests/demo-real.sh
+```
+
+`tests/demo-real.sh` boots its own standalone sequencer + daemon and proves F1 (modules load)
+and F2 (the agent's own shielded account) with real proofs. A **single standalone sequencer
+cannot fund from genesis** — LEZ's authenticated transfer needs the genesis account owned by the
+auth-transfer program, which the full multi-service stack (sequencer + indexer) or the hosted
+testnet provides. So the funded end-to-end run is `tests/demo-testnet.sh` above; `demo-real.sh`
+exits non-zero if the local funding step cannot settle (never a false pass).
+
+> `tests/e2e.sh` is a **template** for a fully-scripted multi-agent run; the CI integration test
+> is `tests/e2e-dev.sh` (standalone sequencer, runs on every push).
 
 ---
 

@@ -6,25 +6,27 @@
 #   2. the Logos Core daemon `logoscore` (on PATH)
 #   3. the agent + wallet module bundles (built via nix)
 #
-# This script builds 1 and 3 and assembles ./runtime-modules for demo-real.sh.
-# Target: Ubuntu 22.04 / x86_64 with nix + a Rust/risc0 toolchain.
+# This script builds 1 and 3. Target: Ubuntu 22.04 / x86_64 with nix + a Rust/risc0 toolchain.
 #
-# TWO VERSIONS, on purpose:
-#   • The LOCAL real-proof demo (tests/demo-real.sh) runs against a standalone sequencer
-#     with a baked, funded genesis (tests/lez-seq-config.json). The module bundles in this
-#     repo link a lez-wallet-core built against the LEZ commit pinned below; the standalone
-#     sequencer's genesis is owned by that same auth-transfer program, so the wallet can
-#     fund the agent locally. Build the LEZ sequencer+wallet from the SAME commit.
-#   • The LIVE hosted testnet runs LEZ v0.2.0 (a newer proving/key scheme). The module was
-#     also ported to v0.2.0 and deployed + funded on the live testnet — see
-#     docs/TESTNET_EVIDENCE_V020.md (real proofs, tx hashes confirmed via getTransaction).
-#     To reproduce the v0.2.0 testnet run instead, set LEZ_TAG=v0.2.0 and point the wallet
-#     at https://testnet.lez.logos.co/ (the standalone genesis owner differs from testnet's,
-#     which is why the local demo pins the matching build).
+# Two demo paths (pick one):
+#   • tests/demo-testnet.sh — the REAL-PROOF reproduction against the LIVE hosted testnet
+#     (LEZ v0.2.0). Verified end-to-end: the agent module creates its shielded account, the
+#     owner funds it from genesis, and the agent reads its balance back through its own skill,
+#     all with RISC0_DEV_MODE=0. Tx hashes are getTransaction-confirmed in
+#     docs/TESTNET_EVIDENCE_V020.md. This is the primary real-proof demo — it needs only
+#     network access to https://testnet.lez.logos.co/ (no local chain to stand up).
+#   • tests/demo-real.sh — the LOCAL structural demo against a single standalone sequencer:
+#     it proves F1 (all modules load) and F2 (the agent creates its own shielded account)
+#     with RISC0_DEV_MODE=0. NOTE: a single standalone sequencer binary cannot fund from
+#     genesis — LEZ's authenticated-transfer needs the genesis account owned by the
+#     auth-transfer program, which is set up by the full multi-service stack
+#     (sequencer + indexer, via the upstream docker-compose) or by the hosted testnet.
+#     So the funded end-to-end payment is reproduced by demo-testnet.sh (or the docker stack),
+#     and demo-real.sh exits honestly if the standalone funding step cannot settle.
 set -euo pipefail
 
-# Pin matching the committed module bundles' lez-wallet-core (pre-v0.2.0 layout).
-LEZ_TAG="${LEZ_TAG:-cf3639d}"
+# Build the LEZ version the hosted testnet runs, so the wallet is testnet-compatible.
+LEZ_TAG="${LEZ_TAG:-v0.2.0}"
 LEZ_SRC="${LEZ_SRC:-$HOME/logos-execution-zone}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -54,6 +56,11 @@ Setup done.
   LEZ_BUILD   = $LEZ_SRC   (sequencer_service + wallet built)
   MODULES_DIR = $MD
 
-Run the real-proof demo (needs \`logoscore\` on PATH):
+Real-proof demo (needs \`logoscore\` on PATH):
+
+  # PRIMARY — funded end-to-end on the LIVE testnet (RISC0_DEV_MODE=0):
+  LEZ_BUILD=$LEZ_SRC MODULES_DIR=$MD bash tests/demo-testnet.sh
+
+  # LOCAL structural demo (F1 modules load + F2 agent account, real proofs):
   LEZ_BUILD=$LEZ_SRC MODULES_DIR=$MD SEQ_CONFIG=$REPO/tests/lez-seq-config.json bash tests/demo-real.sh
 EOF
