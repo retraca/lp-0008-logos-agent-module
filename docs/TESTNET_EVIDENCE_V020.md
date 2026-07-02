@@ -4,6 +4,34 @@ Live evidence against the hosted LEZ testnet after Logos pinned the network to t
 `v0.2.0` tag. All proofs are real RISC0 STARK proofs with `RISC0_DEV_MODE=0`, and every
 transaction hash below is independently confirmed via the sequencer's `getTransaction` RPC.
 
+## Through the agent module (end-to-end on live testnet)
+
+The whole `lez-wallet-core` was ported to LEZ `v0.2.0` (the current testnet's crypto:
+ML-KEM-768 viewing keys, the `{d,z}` viewing-secret layout, the `key_chain`-nested account
+store, and the `to_identifier`/`AccountIdentity`/`LeeTransaction` API), rebuilt as a loadable
+Logos Core module, and run against the **live** hosted testnet:
+
+- **All six modules load** in one Logos Core daemon (agent + lez_wallet + storage + chat +
+  delivery + capability), `0` crashed.
+- The agent **creates its own shielded account** through `lez_wallet_module.ensure_account`, and
+  its A2A card (`agent_module.agent_card`) carries the full shielded identity — the nullifier
+  public key and the 1184-byte ML-KEM viewing public key.
+- The owner **funds the agent 100 LEZ** from genesis on the live testnet (real proof), and the
+  agent then **reads `balance: 100` back through its own `lez_wallet_module.balance` skill** —
+  i.e. the agent independently receives and sees its funds through the module.
+
+| Field | Value |
+| --- | --- |
+| Agent shielded account (npk) | `bd033f4c815964a91306…` |
+| Funding tx (getTransaction ✓) | `9d6354aaf2ba62fba4ca29a1c1dd52e230ffa63cf549f1e32d3e9cab0b30e02d` |
+| Balance read through the agent module | `100` |
+| Modules loaded / crashed | `6 / 0` |
+
+The agent→peer **payment** leg (F8) is shown separately below (wallet path) because the current
+`v0.2.0` `logoscore call` serialises a bare numeric argument as a JSON number while the module's
+`send_to` binding expects a string amount; the shielded agent→peer transfer itself is proven with
+a real on-chain proof (tx `7133cbd1…`).
+
 ## Environment
 
 | Field | Value |
