@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
-# tests/e2e.sh — LP-0008 reproducible end-to-end demo script
+# tests/e2e.sh — TEMPLATE for a fully-scripted multi-agent e2e run.
+#
+# NOTE: this is a template. It requires you to fill in the account constants below
+# (AGENT_MNEMONIC / RECIPIENT_ADDRESS / STORAGE_ENDPOINT). For a runnable real-proof
+# demo with NO manual config, use tests/demo-real.sh. The CI integration test is
+# tests/e2e-dev.sh (standalone sequencer, RISC0_DEV_MODE=1, on every push).
 #
 # Prerequisites (set as environment variables or export before running):
 #   SEQUENCER      URL of the running LEZ standalone sequencer (JSON-RPC)

@@ -130,8 +130,8 @@ if [ "$BAL" != "100" ]; then
   warn "identity (a documented polish item, docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md 'Scope/honesty')."
   warn "F1 (modules load) + F2 (agent account) are verified above against the real sequencer with"
   warn "RISC0_DEV_MODE=0. The real-proof autonomous payment (agent 100->95, peer 0->5) is recorded"
-  warn "in docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md. Stopping here without a false claim."
-  exit 0
+  warn "in docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md. Exiting NON-ZERO so this is never a false pass."
+  exit 1
 fi
 ok "agent funded + synced — balance $BAL (in-tree note, valid membership proof)"
 
@@ -163,7 +163,8 @@ if [ -z "$SETTLED" ]; then
   warn "payment did not settle in-window (agent=$ABAL peer=$PBAL); real proving can exceed the poll"
   warn "window on a loaded machine. The settled real-proof run (agent 100->95, peer 0->5) is recorded"
   warn "in docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md. Daemon log: $DLOG"
-  exit 0
+  warn "Exiting NON-ZERO so an unsettled run is never reported as a pass."
+  exit 1
 fi
 ok "SETTLED with a real proof — agent 100->$ABAL, peer 0->$PBAL"
 

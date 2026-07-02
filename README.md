@@ -131,26 +131,36 @@ logoscore call agent_module meta_status
 
 ## Running tests and the real-proof demo
 
+**Prerequisite — build the stack once (from a clean clone):**
+
+```bash
+# Builds the LEZ sequencer+wallet (from logos-execution-zone v0.2.0) and the module bundles,
+# then assembles ./runtime-modules. Needs nix + a Rust/risc0 toolchain + logoscore on PATH.
+bash scripts/setup.sh
+```
+
+Then run the real-proof demo:
+
 ```bash
 # Lint + build (CI)
 nix flake check
 
-# Real-proof end-to-end demo — SELF-BOOTSTRAPPING (starts its own sequencer + daemon).
-# Auto-detects ./lez-build and the module bundles; override any path if your layout differs:
-#   LOGOSCORE_BIN, LEZ_BUILD, MODULES_DIR, SEQ_CONFIG, SEQ_PORT
-bash tests/demo-real.sh
-
-# Full e2e (three agents, A2A lifecycle, LEZ payment settlement)
-bash tests/e2e.sh
+# Real-proof end-to-end demo — self-bootstrapping (starts its own sequencer + daemon).
+# setup.sh prints the LEZ_BUILD / MODULES_DIR to pass; defaults are auto-detected.
+LEZ_BUILD=~/logos-execution-zone MODULES_DIR=./runtime-modules bash tests/demo-real.sh
 ```
 
-`tests/demo-real.sh` is fully env-driven (no hardcoded paths) and self-bootstrapping: it starts
-its own LEZ sequencer + logoscore daemon, loads the platform + agent modules (F1), creates the
-agent's own shielded account (F2), funds it on the live chain, and has the agent pay a fresh peer
-from its own funds with a **real RISC0 proof** (F8) — all with `RISC0_DEV_MODE=0`. Override any of
-`LOGOSCORE_BIN`, `LEZ_BUILD`, `MODULES_DIR`, `SEQ_CONFIG`, `SEQ_PORT` for your layout. The settled
-real-proof payment (agent 100→95, peer 0→5) is also recorded in `docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`.
-See `tests/README.md` for what each step asserts.
+`tests/demo-real.sh` starts its own LEZ sequencer + logoscore daemon, loads the platform + agent
+modules (F1), creates the agent's own shielded account (F2), funds it on the live chain, and has
+the agent pay a fresh peer from its own funds with a **real RISC0 proof** (F8) — all with
+`RISC0_DEV_MODE=0`. It **exits non-zero** if the real-proof payment does not settle, so a passing
+run is never a false claim. Override `LOGOSCORE_BIN`, `LEZ_BUILD`, `MODULES_DIR`, `SEQ_CONFIG`,
+`SEQ_PORT` for your layout. The settled payment (agent 100→95, peer 0→5) is also recorded in
+`docs/F8_AUTONOMOUS_PAYMENT_EVIDENCE.md`. See `tests/README.md` for what each step asserts.
+
+> `tests/e2e.sh` is a **template** for a fully-scripted multi-agent run and requires configured
+> account constants; the runnable real-proof path is `tests/demo-real.sh` (above), and the
+> CI integration test is `tests/e2e-dev.sh` (standalone sequencer, runs on every push).
 
 ---
 
