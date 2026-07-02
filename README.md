@@ -134,7 +134,7 @@ logoscore call agent_module meta_status
 **Prerequisite — build the stack once (from a clean clone):**
 
 ```bash
-# Builds the LEZ sequencer+wallet (from logos-execution-zone v0.2.0) and the module bundles,
+# Builds the LEZ sequencer+wallet (pinned commit matching the module bundles) + the modules,
 # then assembles ./runtime-modules. Needs nix + a Rust/risc0 toolchain + logoscore on PATH.
 bash scripts/setup.sh
 ```

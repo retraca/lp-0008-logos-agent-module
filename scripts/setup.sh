@@ -7,15 +7,24 @@
 #   3. the agent + wallet module bundles (built via nix)
 #
 # This script builds 1 and 3 and assembles ./runtime-modules for demo-real.sh.
-# Target: Ubuntu 22.04 / x86_64 with nix + a Rust/risc0 toolchain. The LEZ build steps
-# (incl. the unzip + libpython3.10 fixes) and the check-health/funding path are verified;
-# the nix module build uses the same flakes as the committed bundles.
+# Target: Ubuntu 22.04 / x86_64 with nix + a Rust/risc0 toolchain.
 #
-# The hosted testnet is pinned to LEZ v0.2.0; build the wallet from the SAME tag or
-# `wallet check-health` will report "program ID different from remote".
+# TWO VERSIONS, on purpose:
+#   • The LOCAL real-proof demo (tests/demo-real.sh) runs against a standalone sequencer
+#     with a baked, funded genesis (tests/lez-seq-config.json). The module bundles in this
+#     repo link a lez-wallet-core built against the LEZ commit pinned below; the standalone
+#     sequencer's genesis is owned by that same auth-transfer program, so the wallet can
+#     fund the agent locally. Build the LEZ sequencer+wallet from the SAME commit.
+#   • The LIVE hosted testnet runs LEZ v0.2.0 (a newer proving/key scheme). The module was
+#     also ported to v0.2.0 and deployed + funded on the live testnet — see
+#     docs/TESTNET_EVIDENCE_V020.md (real proofs, tx hashes confirmed via getTransaction).
+#     To reproduce the v0.2.0 testnet run instead, set LEZ_TAG=v0.2.0 and point the wallet
+#     at https://testnet.lez.logos.co/ (the standalone genesis owner differs from testnet's,
+#     which is why the local demo pins the matching build).
 set -euo pipefail
 
-LEZ_TAG="${LEZ_TAG:-v0.2.0}"          # commit a58fbce2ff48c58b7bb5001b1a27e64b9596ee3a
+# Pin matching the committed module bundles' lez-wallet-core (pre-v0.2.0 layout).
+LEZ_TAG="${LEZ_TAG:-cf3639d}"
 LEZ_SRC="${LEZ_SRC:-$HOME/logos-execution-zone}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -46,5 +55,5 @@ Setup done.
   MODULES_DIR = $MD
 
 Run the real-proof demo (needs \`logoscore\` on PATH):
-  LEZ_BUILD=$LEZ_SRC MODULES_DIR=$MD bash tests/demo-real.sh
+  LEZ_BUILD=$LEZ_SRC MODULES_DIR=$MD SEQ_CONFIG=$REPO/tests/lez-seq-config.json bash tests/demo-real.sh
 EOF
