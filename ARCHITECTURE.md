@@ -1,8 +1,7 @@
-# ARCHITECTURE.md — Proposed LP-0008 agent module design
+# ARCHITECTURE.md — LP-0008 agent module design
 
-Companion to `LEARNING.md` (read that first for the stack + API citations). This is a
-*proposed* design, grounded in the real APIs found. Where a layer has no native API, the
-design says so and points to the gap in `LEARNING.md §10`.
+Grounded in the real Logos APIs. Where a layer has no native API, the design says so and
+notes the gap (see the Known limitations in `SUBMISSION.md`).
 
 ---
 

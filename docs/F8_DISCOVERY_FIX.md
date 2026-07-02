@@ -247,7 +247,7 @@ no live replica. This is in the SDK transport layer (replica lifecycle + host-si
 the agent module — it cannot be fixed from agent code. It works on Linux (agate1's headless A2A) and
 in the in-process `Local` transport. The agent now uses the LpClient path (the architecturally-intended
 persistent-subscription design); it is UNVERIFIED on macOS for the reason above and should be verified
-on Linux. This needs an SDK-level fix or the team's input — see docs/TEAM_QUESTION_F8.md.
+on Linux. This needs an SDK-level fix or the Logos team's input (reported upstream).
 
 ## 15. CORRECTED root cause — source-side emit, not replica lifecycle (2026-06-25)
 Read the SDK source directly (logos_protocol.cpp, logos_api_consumer.cpp, module_proxy.cpp):

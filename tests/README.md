@@ -82,7 +82,7 @@ bash tests/e2e.sh
 ## TODO stubs — what must be filled in before the script is fully runnable
 
 The script is syntactically valid (`bash -n tests/e2e.sh` passes) and structurally complete.
-Three categories of values must be filled in at the **runtime milestone** (BUILD_PLAN.md Phase 1–3):
+Three categories of values must be filled in at the **runtime milestone**:
 
 | Constant | Where to set | What it needs |
 |---|---|---|

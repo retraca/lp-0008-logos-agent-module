@@ -222,7 +222,7 @@ identity; the chat intro-bundle is derived from a separate chat-module keypair.
 The ideal design derives the chat intro-bundle deterministically from the NSK so a single root
 secret produces both identities. This derivation is not implemented in the current submission
 because the `liblogoschat` API does not expose a seed-based identity constructor in the version
-researched (see LEARNING.md §9, §10 gap 2). The Agent Card signature provides a weaker binding:
+researched. The Agent Card signature provides a weaker binding:
 the agent proves it controls both keys by signing the card that contains both.
 
 This limitation means a verifier cannot cryptographically prove the chat address and the LEZ
