@@ -85,15 +85,25 @@ All evidence files are in `docs/`.
 ## Quick-start deploy
 
 ```bash
-# 1. Single-command deploy (agent-cli)
+# 1. Single-command deploy (agent-cli): loads the agent next to the wallet/platform
+#    modules and configures the spending threshold in one invocation.
 agent up \
-  --node ssh://user@your-node \
-  --owner-key ~/.logos/keys/owner.key \
-  --spend-threshold 10          # LEZ; above this requires owner approval
+  --modules-dir ./result-agent \      # dir of built module bundles (nix build .#lib)
+  --owner <YOUR-NPK-HEX> \            # owner account the agent notifies for approvals
+  --per-tx-limit 10.0 \              # LEZ; above this, the agent asks the owner
+  --per-period-limit 100.0 \
+  --detach                          # leave the daemon running in the background
+#   global: --sequencer http://127.0.0.1:3040  (default; point at your sequencer)
 
-# 2. Interact from any Basecamp instance with your keys
-agent chat   # opens owner channel; type `meta.skills()` to list capabilities
+# 2. Inspect / drive the agent
+agent status                         # balance, storage usage, active tasks
+logoscore call agent_module meta_skills     # list all 21 skills
+# Owner-side chat is the Basecamp owner mini-app (basecamp-app/) over the E2E owner channel.
 ```
+
+> Funding: the agent's shielded account is funded with a real wallet transfer
+> (`wallet auth-transfer send --to <agent-address> --amount N`), not the `agent fund`
+> convenience wrapper (which is an unfinished helper — see Known limitations).
 
 ### Manual deploy (against a local or hosted sequencer)
 

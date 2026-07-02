@@ -229,6 +229,29 @@ now demonstrated as real distributed round-trips on the live Logos Storage (Code
    shielded transfer, not an atomic reversal. An escrow LEZ program is the upgrade path.
    Documented in `docs/A2A_BINDING.md`.
 
+6. **Platform delivery patch** — `patches/liblogosdelivery-lightpush-legacy-codec.patch` fixes a
+   lightpush codec bug in the platform delivery module so peer-card delivery works. The *agent*
+   module loads unmodified alongside wallet/storage; this patch is to the platform transport, not
+   to the agent, and is a workaround for a platform bug rather than a design dependency.
+
+7. **Third-party skill hot-loading** — the `ISkill` interface (`scaffold/interfaces/skill.h`,
+   `docs/SKILL_INTERFACE.md`) is the documented extension contract and new skills compile against
+   it, but the runtime provider-registration loop in `meta_skills` is not yet wired
+   (`(void)provider`), so a third-party skill is added by building it into the module rather than
+   dropped in at runtime. Hot-load is the upgrade path.
+
+8. **`agent fund` wrapper** — the `agent-cli` `fund` subcommand is an unfinished convenience
+   wrapper (exits non-zero); funding is done with the wallet directly
+   (`wallet auth-transfer send`), as in `docs/TESTNET_EVIDENCE_V020.md`.
+
+9. **Deployment CU** — `docs/CU_COSTS.md` measures shielded transfers and public program calls with
+   real cycle counts; `program.deploy` cost is inferred to be the same order (a shielded program
+   transaction) but is not separately benchmarked.
+
+10. **Demo prerequisites** — `tests/demo-real.sh` self-bootstraps the sequencer + daemon but needs
+    the built LEZ stack (`lez-build` binaries via `cargo build`) and the module bundles
+    (`nix build .#lib`) first; it fails fast with a pointer to the build steps if they are absent.
+
 ---
 
 ## Build instructions
