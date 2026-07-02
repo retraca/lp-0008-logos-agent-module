@@ -15,7 +15,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use common::transaction::NSSATransaction;
+use common::transaction::LeeTransaction;
 use nssa::{
     AccountId,
     ProgramDeploymentTransaction,
@@ -25,6 +25,7 @@ use nssa::{
 use nssa_core::{NullifierPublicKey, encryption::ViewingPublicKey};
 use wallet::{
     WalletCore,
+    AccountIdentity,
     program_facades::native_token_transfer::NativeTokenTransfer,
 };
 use sequencer_service_rpc::RpcClient as _;
@@ -107,7 +108,7 @@ fn account_id_from_wallet(paths: &AgentPaths) -> Result<AccountId, ProviderError
     let storage: serde_json::Value = serde_json::from_slice(&storage_bytes)?;
 
     // wallet_storage.json has "accounts": [ { "Private": { "account_id": "...", ... } }, ... ]
-    if let Some(accounts) = storage.get("accounts").and_then(|v| v.as_array()) {
+    if let Some(accounts) = storage.get("key_chain").and_then(|kc| kc.get("accounts")).and_then(|v| v.as_array()) {
         for entry in accounts {
             if let Some(priv_data) = entry.get("Private") {
                 if let Some(aid_str) = priv_data.get("account_id").and_then(|v| v.as_str()) {
@@ -154,31 +155,32 @@ fn agent_private_keys_from_wallet(
                     .and_then(|v| v.as_array())
                     .and_then(|a| a.first()),
             ) {
-                if let (Some(npk_arr), Some(vsk_arr)) = (
+                let vsk_obj = data_val
+                    .get("private_key_holder")
+                    .and_then(|v| v.get("viewing_secret_key"));
+                if let (Some(npk_arr), Some(d_arr), Some(z_arr)) = (
                     data_val.get("nullifier_public_key").and_then(|v| v.as_array()),
-                    data_val
-                        .get("private_key_holder")
-                        .and_then(|v| v.get("viewing_secret_key"))
-                        .and_then(|v| v.as_array()),
+                    vsk_obj.and_then(|v| v.get("d")).and_then(|v| v.as_array()),
+                    vsk_obj.and_then(|v| v.get("z")).and_then(|v| v.as_array()),
                 ) {
-                    let npk_bytes: Vec<u8> = npk_arr
-                        .iter()
-                        .filter_map(|v| v.as_u64().map(|b| b as u8))
-                        .collect();
-                    let vsk_bytes: Vec<u8> = vsk_arr
-                        .iter()
-                        .filter_map(|v| v.as_u64().map(|b| b as u8))
-                        .collect();
-                    if npk_bytes.len() == 32 && vsk_bytes.len() == 32 {
+                    let as_bytes = |a: &Vec<serde_json::Value>| -> Vec<u8> {
+                        a.iter().filter_map(|v| v.as_u64().map(|b| b as u8)).collect()
+                    };
+                    let npk_bytes = as_bytes(npk_arr);
+                    let d_bytes = as_bytes(d_arr);
+                    let z_bytes = as_bytes(z_arr);
+                    if npk_bytes.len() == 32 && d_bytes.len() == 32 && z_bytes.len() == 32 {
                         let mut npk_arr32 = [0u8; 32];
                         npk_arr32.copy_from_slice(&npk_bytes);
-                        let mut vsk_arr32 = [0u8; 32];
-                        vsk_arr32.copy_from_slice(&vsk_bytes);
+                        let mut d32 = [0u8; 32];
+                        d32.copy_from_slice(&d_bytes);
+                        let mut z32 = [0u8; 32];
+                        z32.copy_from_slice(&z_bytes);
                         let account_id: AccountId = aid_str
                             .parse()
                             .context("failed to parse wallet storage account_id")?;
                         let npk = NullifierPublicKey(npk_arr32);
-                        let vpk = ViewingPublicKey::from_scalar(vsk_arr32);
+                        let vpk = ViewingPublicKey::from_seed(&d32, &z32);
                         return Ok((account_id, npk, vpk));
                     }
                 }
@@ -200,7 +202,7 @@ fn public_account_id_from_wallet(paths: &AgentPaths) -> Result<AccountId, Provid
     let storage_bytes = std::fs::read(&paths.storage_path)?;
     let storage: serde_json::Value = serde_json::from_slice(&storage_bytes)?;
 
-    if let Some(accounts) = storage.get("accounts").and_then(|v| v.as_array()) {
+    if let Some(accounts) = storage.get("key_chain").and_then(|kc| kc.get("accounts")).and_then(|v| v.as_array()) {
         for entry in accounts {
             // Look for Preconfigured.Public entries (genesis-funded accounts)
             if let Some(preconf) = entry.get("Preconfigured") {
@@ -287,7 +289,7 @@ pub async fn ensure_account(home_dir: &Path, passphrase: &str) -> Result<String,
     eprintln!("===========================================================");
 
     // Persist wallet state.
-    wallet.store_persistent_data().await?;
+    wallet.store_persistent_data()?;
 
     // Derive and return AccountId.
     let npk_bytes = keys::derive_npk(&nsk);
@@ -302,7 +304,7 @@ pub async fn get_npk(home_dir: &Path, _passphrase: &str) -> Result<String, Provi
     let paths = AgentPaths::new(home_dir);
     let storage_bytes = std::fs::read(&paths.storage_path)?;
     let storage: serde_json::Value = serde_json::from_slice(&storage_bytes)?;
-    if let Some(accounts) = storage.get("accounts").and_then(|v| v.as_array()) {
+    if let Some(accounts) = storage.get("key_chain").and_then(|kc| kc.get("accounts")).and_then(|v| v.as_array()) {
         for entry in accounts {
             if let Some(priv_data) = entry.get("Private") {
                 if let Some(data) = priv_data.get("data").and_then(|v| v.get("value")).and_then(|v| v.as_array()).and_then(|a| a.first()) {
@@ -327,7 +329,7 @@ pub async fn get_vpk(home_dir: &Path, _passphrase: &str) -> Result<String, Provi
     let paths = AgentPaths::new(home_dir);
     let storage_bytes = std::fs::read(&paths.storage_path)?;
     let storage: serde_json::Value = serde_json::from_slice(&storage_bytes)?;
-    if let Some(accounts) = storage.get("accounts").and_then(|v| v.as_array()) {
+    if let Some(accounts) = storage.get("key_chain").and_then(|kc| kc.get("accounts")).and_then(|v| v.as_array()) {
         for entry in accounts {
             if let Some(priv_data) = entry.get("Private") {
                 if let Some(data) = priv_data.get("data").and_then(|v| v.get("value")).and_then(|v| v.as_array()).and_then(|a| a.first()) {
@@ -379,7 +381,7 @@ pub async fn sync_private(home_dir: &Path) -> Result<bool, ProviderError> {
         .context("failed to get chain tip from sequencer")?;
 
     wallet.sync_to_block(tip).await?;
-    wallet.store_persistent_data().await?;
+    wallet.store_persistent_data()?;
     Ok(true)
 }
 
@@ -448,7 +450,7 @@ pub async fn send_shielded(
         if to_id == agent_account_id {
             // Self-fund: send from genesis public account into our own fresh private commitment.
             let ntt = NativeTokenTransfer(&wallet);
-            ntt.send_shielded_transfer_to_outer_account(from_id, agent_npk, agent_vpk, amount)
+            ntt.send_shielded_transfer_to_outer_account(AccountIdentity::Public(from_id), agent_npk, agent_vpk, 0u128, amount)
                 .await?
         } else {
             // Sending to another known account by AccountId is not yet supported via shielded path
@@ -491,7 +493,6 @@ pub async fn send_to_foreign(
     vpk_hex: &str,
     amount_decimal: &str,
 ) -> Result<String, ProviderError> {
-    use nssa_core::encryption::shared_key_derivation::Secp256k1Point;
 
     let amount: u128 = amount_decimal
         .trim()
@@ -514,13 +515,13 @@ pub async fn send_to_foreign(
     // Decode recipient VPK (33 bytes compressed secp256k1).
     let vpk_bytes = hex::decode(vpk_hex.trim())
         .map_err(|e| ProviderError::Wallet(anyhow::anyhow!("invalid vpk_hex: {e}")))?;
-    if vpk_bytes.len() != 33 {
+    if vpk_bytes.len() != 1184 {
         return Err(ProviderError::Wallet(anyhow::anyhow!(
-            "vpk_hex must be 33 bytes (66 hex chars), got {}",
+            "vpk_hex must be 1184 bytes (ML-KEM-768 encapsulation key), got {}",
             vpk_bytes.len()
         )));
     }
-    let to_vpk = Secp256k1Point(vpk_bytes);
+    let to_vpk = ViewingPublicKey::from_bytes(vpk_bytes).map_err(|e| ProviderError::Wallet(anyhow::anyhow!("invalid vpk: {e:?}")))?;
 
     let paths = AgentPaths::new(home_dir);
     // Source from the agent's OWN shielded account (not a preconfigured/genesis account),
@@ -530,7 +531,7 @@ pub async fn send_to_foreign(
 
     let ntt = NativeTokenTransfer(&wallet);
     let (hash, _secret) = ntt
-        .send_private_transfer_to_outer_account(from_id, to_npk, to_vpk, amount)
+        .send_private_transfer_to_outer_account(from_id, to_npk, to_vpk, 0u128, amount)
         .await?;
 
     Ok(hex::encode(hash))
@@ -635,7 +636,7 @@ pub async fn program_call(
 
     let hash = wallet
         .sequencer_client
-        .send_transaction(NSSATransaction::Public(tx))
+        .send_transaction(LeeTransaction::Public(tx))
         .await
         .context("program_call: send_transaction failed")?;
 
@@ -657,16 +658,16 @@ pub async fn program_deploy(
     let bytecode = std::fs::read(binary_path)?;
 
     // Derive the program ID from the bytecode (risc0 image_id).
-    let program = Program::new(bytecode.clone())
+    let program = Program::new(bytecode.clone().into())
         .map_err(|e| ProviderError::Wallet(anyhow::anyhow!("invalid program binary: {e:?}")))?;
     let program_id = program.id(); // [u32; 8]
 
-    let message = program_deployment_transaction::Message::new(bytecode);
+    let message = program_deployment_transaction::Message::new(bytecode.into());
     let tx = ProgramDeploymentTransaction::new(message);
 
     wallet
         .sequencer_client
-        .send_transaction(NSSATransaction::ProgramDeployment(tx))
+        .send_transaction(LeeTransaction::ProgramDeployment(tx))
         .await
         .context("program_deploy: send_transaction failed")?;
 

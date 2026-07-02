@@ -65,11 +65,11 @@ bip39               = { version = "2", optional = true }
 
 # lez-build path deps (relative to this crate's location; resolved when built from
 # the lez-build workspace with --features lez-bridge).
-nssa_core           = { path = "../../lez-build/nssa/core", optional = true }
-nssa                = { path = "../../lez-build/nssa", optional = true }
-wallet              = { path = "../../lez-build/wallet", optional = true }
-sequencer_service_rpc = { path = "../../lez-build/sequencer/service/rpc", optional = true }
-common              = { path = "../../lez-build/common", optional = true }
+nssa_core           = { package = "lee_core", path = "../../lez-build/lee/state_machine/core", optional = true }
+nssa                = { package = "lee", path = "../../lez-build/lee/state_machine", optional = true }
+wallet              = { path = "../../lez-build/lez/wallet", optional = true }
+sequencer_service_rpc = { path = "../../lez-build/lez/sequencer/service/rpc", optional = true }
+common              = { path = "../../lez-build/lez/common", optional = true }
 
 [lib]
 name       = "lez_wallet_core"

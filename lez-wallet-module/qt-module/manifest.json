@@ -1,0 +1,19 @@
+{
+  "author": "",
+  "category": "blockchain",
+  "dependencies": [],
+  "description": "Shielded LEZ wallet and LEZ program interface. Wraps lez-wallet-core (Rust) via FFI. Required by LP-0008 agent_module for all wallet.* and program.* skills.",
+  "hashes": {
+    "root": "5d246086775ede65574dc1610e0de9003999003efa1f0b866b29550aa02d7ac3",
+    "variants": "c33131730e486b60ea3c130b4018bcd4d902e40a29b69a879b7d61d83bd4ee1c",
+    "variants/linux-amd64-dev": "3d6501402ede9f5b406b00ceb8d52dcd53cc816c8ea8fa87ad8369231c20f643"
+  },
+  "icon": "",
+  "main": {
+    "linux-amd64-dev": "lez_wallet_module_plugin.so"
+  },
+  "manifestVersion": "0.3.0",
+  "name": "lez_wallet_module",
+  "type": "core",
+  "version": "0.1.0"
+}
