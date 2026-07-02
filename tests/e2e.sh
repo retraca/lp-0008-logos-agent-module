@@ -116,7 +116,7 @@ assert_no_error "meta.configure (spending limits)" "${configure_result}"
 # ---------------------------------------------------------------------------
 log "--- Step 2: wallet.balance ---"
 # TODO (runtime milestone): this step requires the lez_wallet_module to be
-# built (BUILD_PLAN.md Phase 1) and loaded alongside agent_module. The
+# built (built via nix) and loaded alongside agent_module. The
 # agent_module's wallet.balance skill delegates to lez_wallet_module via
 # the LogosAPI interface binding.
 balance_result=$(logos_call "agent_module" 'wallet.balance()')

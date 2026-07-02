@@ -32,10 +32,14 @@ Qt 6.9.2, linking the prebuilt lez-bridge Rust core); added the `lez_wallet_vpk`
 the card exposes the full identity; replaced the non-delivering async send with the sync binding;
 fixed the spending-limit quote-parse bug; wired five previously-stub skills to real wallet calls.
 
-Remaining before resubmission: re-record the demo *through the agent* (real proofs), Git LFS for
-the 117 MB prebuilt core so the repo clones-and-builds, redeploy the three category agents on the
-live (reset) LEZ testnet with resolvable evidence, `agent.subscribe` streaming + `agent.cancel`
-refund, and a final scorecard pass.
+Update (2026-07-02): the items above are done. The stack was ported to the current testnet's
+LEZ `v0.2.0` (ML-KEM-768 viewing keys, the `key_chain` account store, the new transfer-facade
+API) and rebuilt as a loadable module; the three category agents are deployed and funded on the
+**live** v0.2.0 testnet with `getTransaction`-confirmed tx hashes (`docs/TESTNET_EVIDENCE_V020.md`),
+and the agent is funded and reads `balance: 100` back **through its own module skill** on that
+live testnet (tx `9d6354aa…`). The prebuilt core ships via Git LFS. The one genuinely remaining
+item is the **builder's voice-over** on the demo videos (the prize requires narration); the silent
+cuts and the narration script (`docs/VIDEO_NARRATION.md`) are committed.
 
 ---
 

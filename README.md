@@ -96,7 +96,7 @@ agent up \
 #   global: --sequencer http://127.0.0.1:3040  (default; point at your sequencer)
 
 # 2. Inspect / drive the agent
-agent status                         # balance, storage usage, active tasks
+agent status --modules-dir ./result-agent   # balance, storage usage, active tasks
 logoscore call agent_module meta_skills     # list all 21 skills
 # Owner-side chat is the Basecamp owner mini-app (basecamp-app/) over the E2E owner channel.
 ```

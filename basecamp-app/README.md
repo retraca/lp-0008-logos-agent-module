@@ -12,7 +12,7 @@ spending-limit config — all from inside the Logos Basecamp interface.
 |---|---|
 | Agent Status | `meta.status()` — balance, active tasks, pending approvals, period spend |
 | Pending Approvals | `approve_pending({ task_id })` / `reject_pending({ task_id })` |
-| Send Message | `owner.send({ message })` — sends text on the E2E owner 1:1 channel |
+| Send Message | `messaging.send({ message })` — sends text on the E2E owner 1:1 channel |
 | Spending Limits / Config | `meta.configure({ key, value })` — per_tx_limit, per_period_limit, period_seconds, owner_address |
 | Skills | `meta.skills()` — lists all registered skills |
 
@@ -79,7 +79,7 @@ corresponding `agent_module` C++ handlers:
 | `"meta.configure"` | `agent_module::meta_configure({ key, value })` | `{ ok, key, value }` |
 | `"approve_pending"` | `agent_module::approve_pending({ task_id })` | `{ ok, task_id, executed }` |
 | `"reject_pending"` | `agent_module::reject_pending({ task_id })` | `{ ok, task_id, cancelled }` |
-| `"owner.send"` | `agent_module::owner_send({ message })` | `{ ok, delivered }` |
+| `"messaging.send"` | `agent_module::messaging_send({ message })` | `{ ok, delivered }` |
 
 The exact shape of `window.logos.callModule` is not publicly specified in the Logos
 documentation as of this writing. This app mirrors the pattern described in the LP-0008

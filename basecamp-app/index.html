@@ -60,7 +60,7 @@
        "meta.configure"     → agent_module::meta_configure(params)
        "approve_pending"    → agent_module::approve_pending(params)
        "reject_pending"     → agent_module::reject_pending(params)
-       "owner.send"         → agent_module::owner_send(params)
+       "messaging.send"         → agent_module::messaging_send(params)
 
      This bridge is only available when the mini-app is
      loaded inside a running Basecamp build that has the
@@ -171,7 +171,7 @@ const MOCK_MODE = !(window.logos && typeof window.logos.callModule === 'function
  *   "meta.configure"   — agent_module::meta_configure({ key, value })
  *   "approve_pending"  — agent_module::approve_pending({ task_id })
  *   "reject_pending"   — agent_module::reject_pending({ task_id })
- *   "owner.send"       — agent_module::owner_send({ message })
+ *   "messaging.send"       — agent_module::messaging_send({ message })
  */
 async function callModule(method, params) {
   if (!MOCK_MODE) {
@@ -230,7 +230,7 @@ async function callModule(method, params) {
       return { ok: true, task_id: params.task_id, executed: true };
     case 'reject_pending':
       return { ok: true, task_id: params.task_id, cancelled: true };
-    case 'owner.send':
+    case 'messaging.send':
       return { ok: true, delivered: true };
     default:
       return { error: 'unknown method: ' + method };
@@ -358,14 +358,14 @@ async function sendOwnerMessage() {
   out.style.display = 'none';
   if (!body) { out.textContent = 'Error: message is empty.'; out.style.display = 'block'; return; }
   try {
-    // Calls agent_module::owner_send({ message })
+    // Calls agent_module::messaging_send({ message })
     // Agent sends the text on the E2E owner 1:1 channel (chat_module::sendMessage).
     // Returns { ok, delivered }
-    const r = await callModule('owner.send', { message: body });
+    const r = await callModule('messaging.send', { recipient: 'owner', message: body });
     out.textContent = r.ok ? '✓ Sent' : JSON.stringify(r, null, 2);
     out.style.display = 'block';
   } catch (e) {
-    showError('msg-out', 'owner.send failed: ' + e.message);
+    showError('msg-out', 'messaging.send failed: ' + e.message);
   }
 }
 

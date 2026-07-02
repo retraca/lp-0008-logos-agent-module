@@ -17,7 +17,7 @@ nix build .../logos-delivery-module \
 ```
 
 After the patched dylib is deployed, the module-driven cross-node send negotiates
-cleanly and the message reaches the subscriber (see docs/EVIDENCE_PEERS.md:
+cleanly and the message reaches the subscriber (see docs/MESSAGING_TESTNET_EVIDENCE.md:
 msg_hash matches across sender → nwaku → receiver). Cross-node *receive* (filter)
 already worked unpatched. This is an upstream fix for the platform delivery module,
 included here for reproducibility.

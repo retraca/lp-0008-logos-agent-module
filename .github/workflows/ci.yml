@@ -60,7 +60,7 @@ jobs:
           echo "OK: agent_module_plugin.so built + manifest present"
 
       # TODO (runtime milestone): build the lez_wallet_module plugin once its
-      # flake/CMakeLists are authored (Phase 1 of BUILD_PLAN.md). Steps will mirror
+      # flake/CMakeLists are authored (when its flake/CMakeLists are authored). Steps will mirror
       # the block above with ./lez_wallet_module#lib instead of ./scaffold#lib.
       # - name: Build lez_wallet_module plugin via nix
       #   run: nix build ./lez_wallet_module#lib --out-link result-wallet
