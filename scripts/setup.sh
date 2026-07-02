@@ -41,17 +41,16 @@ echo "==> 3/5  build the agent + wallet Qt modules (nix, Qt 6.9.2)"
 AGENT_OUT=$(nix build "$REPO/scaffold#install"                 --override-input nixpkgs "$QT_PIN" --print-out-paths --no-link)
 WALLET_OUT=$(nix build "$REPO/lez-wallet-module/qt-module#default" --override-input nixpkgs "$QT_PIN" --print-out-paths --no-link)
 
-echo "==> 4/5  platform modules (storage / chat / delivery) from the logos-co flakes"
+echo "==> 4/5  platform modules (storage / chat / delivery / capability) from the logos-co flakes"
 STORAGE_OUT=$(nix build "github:logos-co/logos-storage-module/b1d82a32c1ba27e20d07b7ed8555fd45b02adb4e#install"  --print-out-paths --no-link)
 CHAT_OUT=$(nix build    "github:logos-co/logos-chat-module/9b22b5223a3220645015592b3c17ebc541f2898d#install"     --print-out-paths --no-link)
 DELIVERY_OUT=$(nix build "github:logos-co/logos-delivery-module/2577383f6e0de24793b523d6ea4991aa6339afd8#install" --print-out-paths --no-link)
-# capability_module ships as a complete bundle alongside the platform modules (its .so + manifest
-# + variant). If your logoscore distribution already provides it, drop it into $MD/capability_module.
+CAP_OUT=$(nix build     "github:logos-co/logos-capability-module/0187d2f404a629c6f20626478986dc4249c11bec#install" --print-out-paths --no-link)
 
 echo "==> 5/5  assemble ./runtime-modules"
 MD="$REPO/runtime-modules"; rm -rf "$MD"; mkdir -p "$MD"
 # platform modules come as complete dirs (module .so + shared libs + manifest.json + variant)
-for out in "$STORAGE_OUT" "$CHAT_OUT" "$DELIVERY_OUT"; do cp -rL "$out"/modules/* "$MD/" 2>/dev/null || cp -rL "$out"/* "$MD/" 2>/dev/null || true; done
+for out in "$STORAGE_OUT" "$CHAT_OUT" "$DELIVERY_OUT" "$CAP_OUT"; do cp -rL "$out"/modules/* "$MD/" 2>/dev/null || cp -rL "$out"/* "$MD/" 2>/dev/null || true; done
 # agent module (nix output has the loadable bundle)
 cp -rL "$AGENT_OUT"/modules/agent_module "$MD/" 2>/dev/null || { mkdir -p "$MD/agent_module"; cp -L "$AGENT_OUT"/lib/*agent*.so "$MD/agent_module/agent_module_plugin.so"; cp -L "$REPO/scaffold/metadata.json" "$MD/agent_module/" 2>/dev/null || true; }
 # wallet module: the nix build gives the .so; package it with the committed manifest.json + variant
