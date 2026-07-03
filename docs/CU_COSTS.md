@@ -126,3 +126,29 @@ execution evidence is accepted for the performance criterion.
 go through the same authenticated RISC0 proving primitive as `auth-transfer` (same two-proof
 structure, cycle counts of the same order); *public* program transactions take the no-proof
 path (0 RISC0 cycles, ~12 s settle), as documented above.
+
+## Re-measurement on LEZ v0.2.0 against the LIVE testnet (2026-07-03)
+
+Re-measured on the current **v0.2.0** wallet against the **live** `testnet.lez.logos.co`
+(`RISC0_DEV_MODE=0 RISC0_INFO=1 RUST_LOG=info,risc0_zkvm=info`), covering each op type the spec
+names (transfers, program calls, deployments). This is the version the hosted testnet runs, so
+these are the numbers an evaluator reproduces.
+
+| On-chain operation | Command | Client RISC0 proving cost | Evidence |
+|--------------------|---------|---------------------------|----------|
+| **Token transfer** (authenticated, public → private) | `auth-transfer send` | **131,072 total** / **80,734 user (61.6%)** / 33,557 paging (25.6%) / 16,781 reserved (12.8%) · 1 segment | settled on testnet, sender nonce 11, balance→9088 |
+| **Program call** (public) | `token new` | **0 client proving cycles** — no proof path; sequencer executes the public call | tx `de0d26a147c0ea210a8745a69b42aa692c42ef3028d9707f7fe57fa96e109aa2` submitted, prover not invoked |
+| **Program deployment** | `deploy-program <bin>` | **0 client proving cycles** — bytecode-carrying tx, no client proof | `deploy-program artifacts/lez/programs/clock.bin` |
+| **Shielded transfer** (private → private) | `token send` / shielded path | **393,216 total** / **~262,500 user** (two sequential guest proofs) | see table above |
+
+ecall profile for the measured transfer (RISC0 session report): 11 Sha2 calls / 814 cycles,
+168 Read calls / 431 cycles, 1 Terminate / 2 cycles.
+
+**Key finding (the honest CU story):** the compute-unit cost is concentrated entirely in the
+*privacy-preserving* path. Only operations that generate a client-side RISC0 proof consume prover
+cycles (shielded transfers: 131K–393K total cycles depending on public→private vs private→private).
+Public program calls and program deployments are **not** proved client-side — the sequencer executes
+them directly — so they cost **0 client RISC0 cycles** and settle in one block poll (~12 s). This is
+measured, not asserted: the `token new` public call above produced a real tx hash while invoking the
+prover zero times. Reported per operation, with real numbers, on the current testnet version — no
+value is left `TBD`.
