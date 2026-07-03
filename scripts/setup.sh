@@ -25,6 +25,11 @@ LEZ_SRC="${LEZ_SRC:-$HOME/logos-execution-zone}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 QT_PIN="github:NixOS/nixpkgs/e9f00bd893984bc8ce46c895c3bf7cac95331127"   # Qt 6.9.2 (logoscore's Qt)
 
+# preflight: the nix builds in step 2 need a reachable nix daemon. Fail early with an actionable
+# message instead of a cryptic "cannot connect to daemon-socket" mid-build.
+command -v nix >/dev/null 2>&1 || { echo "ERROR: nix not found on PATH — install Nix with flakes (see README prerequisites)." >&2; exit 1; }
+nix store info >/dev/null 2>&1 || { echo "ERROR: the nix daemon is not reachable. Start it (systemd: 'sudo systemctl start nix-daemon'; otherwise 'sudo nix-daemon &') and re-run." >&2; exit 1; }
+
 echo "==> 0/4  system build deps + LFS blobs"
 sudo apt-get update -q && sudo apt-get install -y -q unzip libpython3.10-dev patchelf git-lfs
 git -C "$REPO" lfs pull      # materialize the prebuilt wallet plugin
