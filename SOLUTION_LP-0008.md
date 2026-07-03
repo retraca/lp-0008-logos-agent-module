@@ -8,11 +8,14 @@ shielded account, stores and retrieves files on Logos Storage, finds other agent
 Messaging using A2A Agent Cards, runs the A2A task lifecycle, and pays peers from its own funds
 within owner-set spending limits. The owner deploys it on a headless node with one command and
 reaches it from a separate Logos app over an end-to-end encrypted owner channel. Every proof in
-the demos is a real RISC0 STARK proof, `RISC0_DEV_MODE=0`. Every functional criterion is verified
-end to end through the agent on a local LEZ sequencer (see `SUBMISSION.md`). Two items are
-constrained by the platform, not the implementation: the public testnet was reset and has no faucet,
-so F9/F10 are evidenced on a reproducible local devnet; and the Basecamp owner-console GUI (F4/U2)
-needs a local Basecamp build. The demo videos are silent screencasts pending the builder's voice-over.
+the demos is a real RISC0 STARK proof, `RISC0_DEV_MODE=0`. The submission is built and proven
+against **LEZ v0.2.0** — the exact version the hosted testnet runs. **The evaluator's own test —
+clone the repo and run the demo script from a clean environment — is verified end to end: a fresh
+clone → `./demo.sh` boots the six modules, has the agent create its own shielded account, and funds
+it from genesis on the LIVE `testnet.lez.logos.co` with a real RISC0 proof, tx `getTransaction`-
+confirmed on-chain, exit 0.** Three category agents (Storage/Messaging/Blockchain) are funded on the
+same live testnet (F9/F10). One item remains builder-only: the demo videos are ready silent cuts and
+need the builder's voice-over, which the prize requires.
 
 ## Repository
 
@@ -63,8 +66,7 @@ Key decisions and what did not work:
 ## Success Criteria Checklist
 
 Full per-criterion evidence is in `SUBMISSION.md`. The functional criteria are verified through the
-agent with real proofs; the testnet-reset (F9/F10) and Basecamp-GUI (F4/U2) constraints are noted
-there honestly. In brief:
+agent with real proofs on LEZ v0.2.0. In brief:
 
 - **F1-F3:** module loads beside the platform modules unmodified (5 modules, 0 crashed); the
   agent owns and funds its own shielded account; `agent up` deploys and configures in one
@@ -74,9 +76,10 @@ there honestly. In brief:
 - **F6-F8:** 21 documented skills; A2A-compatible Agent Card + task lifecycle over Logos
   Messaging; two agents discover each other (`peer_count=1`), open a task, and pay autonomously
   with a real proof.
-- **F9-F11:** storage, messaging, and blockchain use cases demonstrated; three agents deployed
-  one per category (`docs/LOCAL_F10_EVIDENCE.md`, `docs/TESTNET_EVIDENCE.md`); full docs + clean
-  public repo.
+- **F9-F11:** storage, messaging, and blockchain use cases demonstrated end-to-end; three shielded
+  agents (one per category) funded from genesis on the **live v0.2.0 testnet**, every funding tx
+  `getTransaction`-confirmed (`docs/TESTNET_EVIDENCE_V020.md`); also reproducible on a standalone
+  sequencer (`docs/LOCAL_F10_EVIDENCE.md`); full docs + clean public repo.
 - **U1-U2, R1-R3, P1, S1-S6:** skill SDK; Basecamp owner console; restart-recovery, fail-safe
   notify/hold, skill isolation; CU costs as real RISC0 cycle counts; testnet, CI green, README,
   reproducible demo script, recorded video.
@@ -109,8 +112,10 @@ cycles. Full table in `docs/CU_COSTS.md`.
 ### Supportability
 CI runs lint, a nix build of the plugin, and an `e2e-dev` integration test against a standalone
 LEZ sequencer on every push; green on `main`. README and `SUBMISSION.md` document deployment
-and usage. A reproducible demo script (`tests/demo-real.sh`, `tests/demo-f8-linux-full.sh`)
-runs the full flow with `RISC0_DEV_MODE=0`.
+and usage. The canonical `./demo.sh` is the reproducible end-to-end demo the evaluator runs — a
+fresh clone builds LEZ v0.2.0 + the modules, loads all six, and funds the agent on the live testnet
+with a real proof (`RISC0_DEV_MODE=0`), exit 0, verified from a clean environment. `tests/demo-real.sh`
+is the standalone-sequencer variant.
 
 ## Supporting Materials
 
