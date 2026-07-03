@@ -42,7 +42,7 @@ DELIVERY_OUT=$(nix build "github:logos-co/logos-delivery-module/2577383f6e0de247
 CAP_OUT=$(nix build     "github:logos-co/logos-capability-module/0187d2f404a629c6f20626478986dc4249c11bec#install" --print-out-paths --no-link)
 
 echo "==> 3/4  assemble ./runtime-modules"
-MD="$REPO/runtime-modules"; chmod -R u+w "$MD" 2>/dev/null; rm -rf "$MD"; mkdir -p "$MD"  # prior copies from the read-only nix store need +w before rm
+MD="$REPO/runtime-modules"; chmod -R u+w "$MD" 2>/dev/null || true; rm -rf "$MD"; mkdir -p "$MD"  # prior copies from the read-only nix store need +w before rm (|| true: MD is absent on a fresh clone)
 for out in "$STORAGE_OUT" "$CHAT_OUT" "$DELIVERY_OUT" "$CAP_OUT"; do cp -rL "$out"/modules/* "$MD/" 2>/dev/null || cp -rL "$out"/* "$MD/" 2>/dev/null || true; done
 cp -rL "$AGENT_OUT"/modules/agent_module "$MD/" 2>/dev/null || { mkdir -p "$MD/agent_module"; cp -L "$AGENT_OUT"/lib/*agent*.so "$MD/agent_module/agent_module_plugin.so"; cp -L "$REPO/scaffold/metadata.json" "$MD/agent_module/" 2>/dev/null || true; }
 # wallet module: committed prebuilt plugin + manifest + variant
