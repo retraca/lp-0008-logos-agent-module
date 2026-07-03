@@ -37,9 +37,15 @@ LEZ `v0.2.0` (ML-KEM-768 viewing keys, the `key_chain` account store, the new tr
 API) and rebuilt as a loadable module; the three category agents are deployed and funded on the
 **live** v0.2.0 testnet with `getTransaction`-confirmed tx hashes (`docs/TESTNET_EVIDENCE_V020.md`),
 and the agent is funded and reads `balance: 100` back **through its own module skill** on that
-live testnet (tx `9d6354aa…`). The prebuilt core ships via Git LFS. The one genuinely remaining
-item is the **builder's voice-over** on the demo videos (the prize requires narration); the silent
-cuts and the narration script (`docs/VIDEO_NARRATION.md`) are committed.
+live testnet (tx `9d6354aa…`). The prebuilt core ships via Git LFS.
+
+Update (2026-07-03): the clone-and-run evaluator flow is **verified end to end from a fresh
+clone** on a clean machine — `./demo.sh` (= `scripts/setup.sh` then `tests/demo-testnet.sh`)
+returns SETUP_EXIT=0, loads all six modules (F1, 6/0), and funds the agent's own shielded account
+from genesis on the live testnet with a real RISC0 proof, tx `getTransaction`-confirmed on-chain
+(F2), all `RISC0_DEV_MODE=0`. The one genuinely remaining item is the **builder's voice-over** on
+the demo videos (the prize requires narration); the silent cuts and the narration script
+(`docs/VIDEO_NARRATION.md`) are committed.
 
 ---
 
@@ -65,7 +71,7 @@ Events: `tx_settled(tx_hash, timestamp)`, `tx_failed(tx_hash, error, timestamp)`
 The autonomous agent: runtime skill dispatcher, spending-threshold gate, owner channel over E2E
 Logos Messaging, A2A coordination, pluggable inference adapter.
 
-Built at: `lp-0008-ai-module/scaffold/`
+Built at: `scaffold/`
 
 21 default skills across Storage / Messaging / Wallet / Programs / A2A / Meta.
 Plus approval skills: `approve_pending`, `reject_pending`.
@@ -164,7 +170,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | S2 | End-to-end integration tests in CI against LEZ sequencer (standalone mode) | **DONE** | The `e2e-dev` CI job (runs on every push) boots a standalone LEZ `sequencer_service` (RISC0_DEV_MODE=1) and runs `tests/e2e-dev.sh` against it: sequencer health, block production, the built `agent_module` plugin is a valid Logos module, metadata schema, and the transaction path. CI green. Real-proof variant (`tests/e2e.sh`/`demo-real.sh`) is a `workflow_dispatch` job (RISC0 proving too slow for auto-CI). |
 | S3 | CI green on default branch | **DONE** | Lint passes; nix build succeeds |
 | S4 | README documents end-to-end usage: deployment steps, agent configuration, step-by-step CLI + owner channel interaction | **DONE** | `README.md`; `SUBMISSION.md` build instructions below |
-| S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `tests/demo-real.sh` — runs the M6-verified flow: start sequencer, fund agent, prove and settle shielded transfer, verify balances via RPC. `RISC0_DEV_MODE=0` confirmed via `ps eww` in script. |
+| S5 | Reproducible end-to-end demo script, `RISC0_DEV_MODE=0` | **DONE** | `./demo.sh` (canonical clone-and-run entry) = `scripts/setup.sh` then `tests/demo-testnet.sh`. **Verified PASS from a fresh clone** on a clean machine: SETUP_EXIT=0, F1 six modules load (6/0), F2 the agent's own shielded account funded 100 LEZ from genesis on the LIVE testnet with a real RISC0 proof, tx `getTransaction`-confirmed on-chain — all `RISC0_DEV_MODE=0`. `tests/demo-real.sh` is the local standalone variant. |
 | S6 | Recorded video demo with builder narration; shows terminal output confirming `RISC0_DEV_MODE=0` | **PENDING (narration)** | Silent screencasts are committed and show terminal output with `RISC0_DEV_MODE=0` visible: `docs/lp0008-agent-demo.mp4` (the flow through the agent) + use-case cuts. The builder's voice-over (which the prize requires) is the one remaining step; scripts in `docs/VIDEO_NARRATION.md`. |
 
 ### Submission Requirements
@@ -283,7 +289,7 @@ ninja -C build
 ### Build `agent_module`
 
 ```bash
-cd lp-0008-ai-module/scaffold
+cd scaffold
 nix develop /path/to/lez-wallet-module/qt-module
 cmake -S . -B build -GNinja -Wno-dev
 ninja -C build
@@ -302,7 +308,7 @@ cd lez-build
 ```bash
 RISC0_DEV_MODE=0 logoscore -D \
   -m lez-wallet-module/qt-module/build/liblez_wallet_module_plugin.so \
-  -m lp-0008-ai-module/scaffold/build/libagent_module_plugin.so
+  -m scaffold/build/libagent_module_plugin.so
 
 logoscore call agent_module meta_skills
 logoscore call agent_module meta_status
@@ -319,7 +325,7 @@ bash tests/demo-real.sh   # RISC0_DEV_MODE=0 verified via ps eww inside the scri
 ## Pre-built artifacts (Linux x86_64)
 
 - `lez-wallet-module/qt-module/liblez_wallet_module_plugin.so` (Linux x86_64 ELF, Qt 6.9.2; built via mkLogosModule)
-- `lp-0008-ai-module/scaffold/libagent_module_plugin.so` (Linux x86_64 ELF, Qt 6.9.2)
+- `scaffold/libagent_module_plugin.so` (Linux x86_64 ELF, Qt 6.9.2)
 
 ---
 
@@ -328,7 +334,7 @@ bash tests/demo-real.sh   # RISC0_DEV_MODE=0 verified via ps eww inside the scri
 ```
 agent-cli/                   Single-command deploy CLI (agent up)
 basecamp-app/                Basecamp owner mini-app
-lp-0008-ai-module/scaffold/
+scaffold/
   src/
     agent_module_impl.h      Full skill surface + spending gate + A2A
     agent_module_impl.cpp    ~1500-line implementation
@@ -340,7 +346,7 @@ lp-0008-ai-module/scaffold/
     storage_module_api.h/cpp  StorageModule platform stub
   CMakeLists.txt
   metadata.json
-  libagent_module_plugin.so  Pre-built arm64 bundle
+  libagent_module_plugin.so  Pre-built Linux x86_64 bundle
 lez-wallet-module/
   lez-wallet-core/           Rust crate: nssa/bedrock_client FFI bridge
     src/provider.rs
@@ -353,7 +359,7 @@ lez-wallet-module/
       lez_wallet_module_impl.h
       lez_wallet_module_impl.cpp
     metadata.json
-    liblez_wallet_module_plugin.so  Pre-built arm64 bundle
+    liblez_wallet_module_plugin.so  Pre-built Linux x86_64 bundle
 docs/
   EVIDENCE_LOCAL.md          M6 local evidence (real-proof A2A settlement)
   TESTNET_EVIDENCE.md        Hosted testnet evidence (3 agents, Blockchain settle)
@@ -365,7 +371,7 @@ docs/
   SKILL_INTERFACE.md         Third-party skill interface spec
   lp0008-agent-demo.mp4      Demo through the agent's own skills (62s, silent; narration pending)
   lp0008-demo.cast           asciinema recording
-  VIDEO_NARRATION.md         Narration script (recorded)
+  VIDEO_NARRATION.md         Narration script (voice-over pending — builder records it)
 tests/
   demo-real.sh               Reproducible real-proof e2e demo
   e2e.sh                     Full three-agent A2A + payment e2e

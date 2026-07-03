@@ -119,7 +119,7 @@ cd lez-build
 # Launch daemon with both modules
 RISC0_DEV_MODE=0 logoscore -D \
   -m lez-wallet-module/qt-module/build/liblez_wallet_module_plugin.so \
-  -m lp-0008-ai-module/scaffold/build/libagent_module_plugin.so
+  -m scaffold/build/libagent_module_plugin.so
 
 # Configure and verify
 logoscore call agent_module meta_configure per_tx_limit 10
