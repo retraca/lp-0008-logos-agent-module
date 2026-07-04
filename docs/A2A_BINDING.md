@@ -72,10 +72,13 @@ extensions (prefixed `x-lez-`) that standard A2A clients ignore.
       "id": "storage.upload",
       "name": "Storage Upload",
       "description": "Encrypts and uploads a file to Logos Storage; returns content address.",
+      "tags": ["storage", "lez"],
       "inputModes": ["application/octet-stream"],
-      "outputModes": ["application/json"]
+      "outputModes": ["application/json"],
+      "x-lez-price": "0"
     }
-    // ... one entry per skill from meta.skills()
+    // ... one entry per skill from meta.skills(); id, name, description and tags are the
+    // A2A-REQUIRED AgentSkill fields (a2a.proto) — the module emits all four (agent_card()).
   ],
   "signature": "<base64-sig-over-card-bytes-with-lez-key>"
 }

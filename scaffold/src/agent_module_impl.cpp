@@ -1072,12 +1072,28 @@ std::string AgentModuleImpl::agent_card() {
         if (skills_arr.contains("result")) skills_arr = skills_arr["result"];
         if (!skills_arr.is_array())        skills_arr = json::array();
 
-        // Build per-skill price entries for agentInterfaces capabilities.
+        // Build A2A-conformant AgentSkill entries. The A2A schema marks id, name,
+        // description and tags as REQUIRED on every skill (a2a.proto AgentSkill), so we
+        // emit all four plus the x-lez-price extension — a bare {skill,price} pair would
+        // fail A2A schema validation.
         json capabilities = json::array();
         for (auto& sk : skills_arr) {
             std::string sname = sk.value("name", sk.value("skill_name", ""));
             std::string price = sk.value("lez_price", "0");
-            capabilities.push_back({{"skill", sname}, {"x-lez-price", price}});
+            std::string desc  = sk.value("description", "");
+            if (desc.empty()) desc = "Agent skill \"" + sname + "\" invoked through the gated A2A task lifecycle";
+            // Category tag from the skill-name prefix (storage/messaging/wallet/program/agent/meta).
+            json tags = json::array();
+            auto us = sname.find('_');
+            if (us != std::string::npos && us > 0) tags.push_back(sname.substr(0, us));
+            tags.push_back("lez");
+            capabilities.push_back({
+                {"id",          sname},
+                {"name",        sname},
+                {"description", desc},
+                {"tags",        tags},
+                {"x-lez-price", price}
+            });
         }
 
         json card = {
