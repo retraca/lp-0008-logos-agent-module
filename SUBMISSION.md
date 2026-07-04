@@ -152,9 +152,9 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
-| R1 | Module recovers from transient failures without losing pending task state | **DONE** | Task state persisted to module data dir, keyed by A2A task ID, reloaded on start — `ARCHITECTURE.md §2` |
-| R2 | Above-threshold transactions that cannot reach owner are not executed; retry then report failure | **DONE** | Retry-then-fail logic with configurable count/interval; no silent execution path — `docs/SECURITY_MODEL.md` (Failure-safe guarantee section) |
-| R3 | Skill failures isolated; a failing skill does not crash the module or affect other skills | **DONE** | Each `invoke()` call wrapped; exceptions returned as `{"error":...}` values, never propagated — `docs/SKILL_INTERFACE.md` (Error handling contract); `scaffold/interfaces/skill.h` |
+| R1 | Module recovers from transient failures without losing pending task state | **DONE** | Atomic write-temp-rename persistence + reload on start (`agent_module_impl.cpp:178-187,321-357`); **demonstrated** by a kill+restart that keeps the held approval — `docs/RELIABILITY_EVIDENCE.md` (R1), demo step 11 |
+| R2 | Above-threshold transactions that cannot reach owner are not executed; retry then report failure | **DONE** | Retry-then-report loop, held spend never executes (`agent_module_impl.cpp:445-457`); **demonstrated** demo step 9 — `docs/RELIABILITY_EVIDENCE.md` (R2), `docs/SECURITY_MODEL.md` |
+| R3 | Skill failures isolated; a failing skill does not crash the module or affect other skills | **DONE** | 66 try/catch blocks; exceptions returned as `{"error":...}` values, never propagated; **demonstrated** by a bad skill call leaving modules 6/0 — `docs/RELIABILITY_EVIDENCE.md` (R3), demo step 12 |
 
 ### Performance
 
