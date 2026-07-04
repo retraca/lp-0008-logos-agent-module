@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+# F8 INTEGRATED on the hosted testnet: two agent daemons discover over local Waku, then agent A
+# pays agent B autonomously (within limit) from its own shielded account — real proof, settled on
+# testnet, in ONE trace (discover -> over-limit hold -> under-limit autonomous pay).
+#
+# Status: the building blocks are individually verified on LEZ v0.2.0 (single-agent boot loads all
+# six modules, creates its own shielded account, exposes the A2A card with npk+vpk; funding + the
+# per-op CU proofs settle on the live testnet — see docs/TESTNET_EVIDENCE_V020.md, docs/CU_COSTS.md).
+# Running the FULL two-agent flow end to end needs a host that can sustain two logoscore daemons +
+# two Waku nodes + RISC0 real-proving at once with a STABLE shell — a resource-heavy, long-running
+# job. Run it on a machine with direct terminal access (not over a flaky remote tunnel).
+#
+# Requires: RISC0_DEV_MODE=0, the LEZ v0.2.0 wallet + a runtime-modules bundle (scripts/setup.sh),
+# and logoscore on PATH. Edit LC/W/MD below if your paths differ.
+set -uo pipefail
+export PATH="$HOME/.cargo/bin:/nix/var/nix/profiles/default/bin:$PATH"
+export RISC0_DEV_MODE=0
+LC=$(for c in /nix/store/*-logos-logoscore-cli/bin/logoscore; do "$c" --version >/dev/null 2>&1 && echo "$c" && break; done)
+W=~/logos-execution-zone/target/release/wallet
+MD=$(ls -d ~/eval-demo/runtime-modules ~/eval-v2/runtime-modules ~/v020-modules 2>/dev/null | head -1)
+TESTNET="https://testnet.lez.logos.co/"
+GEN="Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV"
+GENHEX="10a26a9aec7d34b82364eeae45c5294dbb0a764b000b94eeb9b58511dc487c4d"
+PW="demo-pass"; TOPIC="/logos/1/agent-discovery/proto"
+R=~/f8-testnet.out; : > "$R"
+st(){ echo "" >>"$R"; echo ">>> $* <<<" >>"$R"; }
+say(){ echo "$*" >>"$R"; }
+
+say "LC=$LC"; say "MD=$MD"; say "W=$W"
+[ -n "$MD" ] && [ -n "$LC" ] || { say "MISSING LC or MD"; echo STAGE_FAIL_SETUP >>"$R"; exit 1; }
+
+WCFG='{"sequencer_addr":"'"$TESTNET"'","seq_poll_timeout":"60s","seq_tx_poll_max_blocks":80,"seq_poll_max_retries":40,"seq_block_poll_max_amount":200}'
+pkill -9 -f "logoscore -D" 2>/dev/null; sleep 3
+
+LM(){ for m in storage_module delivery_module lez_wallet_module agent_module; do timeout 60 "$LC" --config-dir "$1" load-module "$m" >/dev/null 2>&1; done; }
+boot(){ # $1=tag (A|B)  — every call timeout-guarded so a not-ready daemon can't hang the script
+  local tag="$1" cd=~/cfg$tag pp=~/data$tag
+  rm -rf "$cd" "$pp"; mkdir -p "$cd" "$pp"
+  echo "  boot$tag: daemon1" >>"$R"
+  RISC0_DEV_MODE=0 "$LC" -D -m "$MD" --config-dir "$cd" --persistence-path "$pp" >~/daemon$tag.log 2>&1 & disown
+  sleep 10
+  echo "  boot$tag: load1" >>"$R"; LM "$cd"; sleep 3
+  echo "  boot$tag: ensure1" >>"$R"; timeout 90 "$LC" --config-dir "$cd" call lez_wallet_module ensure_account >/dev/null 2>&1; sleep 2
+  local wc=$(find "$pp"/lez_wallet_module -name wallet_config.json 2>/dev/null | head -1)
+  [ -n "$wc" ] && echo "$WCFG" > "$wc"
+  echo "  boot$tag: restart (wc=$wc)" >>"$R"
+  pkill -9 -f "config-dir $cd" 2>/dev/null; sleep 5
+  RISC0_DEV_MODE=0 "$LC" -D -m "$MD" --config-dir "$cd" --persistence-path "$pp" >~/daemon$tag.2.log 2>&1 & disown
+  sleep 12
+  echo "  boot$tag: load2" >>"$R"; LM "$cd"; sleep 3
+  echo "  boot$tag: ensure2" >>"$R"; timeout 90 "$LC" --config-dir "$cd" call lez_wallet_module ensure_account >/dev/null 2>&1; sleep 2
+  echo "  boot$tag: done" >>"$R"
+}
+
+st "STAGE 1: boot agent A"
+boot A
+LOADED_A=$("$LC" --config-dir ~/cfgA status 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin)['modules_summary'];print(d['loaded'],d['crashed'])" 2>/dev/null)
+say "agent A modules (loaded crashed): $LOADED_A"
+read -r ANPK AVPK < <("$LC" --config-dir ~/cfgA call agent_module agent_card 2>&1 | python3 -c "import sys,json
+d=json.load(sys.stdin); r=json.loads(d['result'])['result']; i=r.get('x-lez-identity',{}); print(i.get('npk',''), i.get('vpk',''))" 2>/dev/null)
+say "agent A npk=${ANPK:0:16}… vpk_len=${#AVPK}"
+
+st "STAGE 2: boot agent B"
+boot B
+read -r BNPK BVPK < <("$LC" --config-dir ~/cfgB call agent_module agent_card 2>&1 | python3 -c "import sys,json
+d=json.load(sys.stdin); r=json.loads(d['result'])['result']; i=r.get('x-lez-identity',{}); print(i.get('npk',''), i.get('vpk',''))" 2>/dev/null)
+say "agent B npk=${BNPK:0:16}… vpk_len=${#BVPK}"
+[ -n "$ANPK" ] && [ -n "$BNPK" ] || { say "no agent identities"; echo STAGE_FAIL_IDENTITY >>"$R"; exit 1; }
+
+st "STAGE 3: fund agent A 100 from genesis on testnet (real proof)"
+export LEE_WALLET_HOME_DIR=~/f8-fund-home; rm -rf "$LEE_WALLET_HOME_DIR"; mkdir -p "$LEE_WALLET_HOME_DIR"
+echo "$WCFG" > "$LEE_WALLET_HOME_DIR/wallet_config.json"
+printf "%s\n" "$PW" | $W account import public --private-key "$GENHEX" >/dev/null 2>&1
+printf "%s\n" "$PW" | $W config set sequencer_addr "$TESTNET" >/dev/null 2>&1
+TXA=$(printf "%s\n" "$PW" | RISC0_DEV_MODE=0 $W auth-transfer send --from "$GEN" --to-npk "$ANPK" --to-vpk "$AVPK" --amount 100 2>&1 | grep -oiE "hash is [0-9a-f]{64}" | awk '{print $3}')
+say "fund A tx: ${TXA:-FAILED}"
+
+st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is held)"
+"$LC" --config-dir ~/cfgA call agent_module meta_configure per_tx_limit 50 >/dev/null 2>&1
+"$LC" --config-dir ~/cfgA call agent_module meta_configure agent_npk "$ANPK" >/dev/null 2>&1
+
+st "STAGE 5: local Waku — two delivery nodes, B statically connects to A"
+"$LC" --config-dir ~/cfgA call delivery_module createNode '{"logLevel":"ERROR","mode":"Core","relay":true,"clusterId":16,"numShardsInNetwork":8,"tcpPort":60010,"discv5UdpPort":60011,"restPort":60012,"metricsServerPort":60013,"websocketPort":60014}' >~/nodeA.log 2>&1
+sleep 5
+APID=$(grep -oE "16U[A-Za-z0-9]+" ~/nodeA.log | head -1)
+say "agent A waku peer id: ${APID:-NONE}"
+"$LC" --config-dir ~/cfgB call delivery_module createNode "{\"logLevel\":\"ERROR\",\"mode\":\"Core\",\"relay\":true,\"clusterId\":16,\"numShardsInNetwork\":8,\"tcpPort\":60020,\"discv5UdpPort\":60021,\"restPort\":60022,\"metricsServerPort\":60023,\"websocketPort\":60024,\"staticnodes\":[\"/ip4/127.0.0.1/tcp/60010/p2p/$APID\"]}" >~/nodeB.log 2>&1
+sleep 6
+
+st "STAGE 6: agents discover each other (F8)"
+PC=0
+for r in $(seq 1 16); do
+  "$LC" --config-dir ~/cfgB call agent_module agent_discover "$TOPIC" >/dev/null 2>&1
+  "$LC" --config-dir ~/cfgA call agent_module agent_discover "$TOPIC" >/dev/null 2>&1
+  "$LC" --config-dir ~/cfgA call agent_module meta_status >~/msA.json 2>/dev/null
+  PC=$(python3 -c "import re;t=open('$HOME/msA.json').read();m=re.search(r'peer_count.{0,6}([0-9]+)',t);print(m.group(1) if m else 0)" 2>/dev/null)
+  [ "${PC:-0}" -ge 1 ] 2>/dev/null && break; sleep 5
+done
+say "agent A peer_count=$PC"
+
+st "STAGE 7: over-limit task is HELD (F5) — card priced 80 > limit 50"
+GATECARD="{\"name\":\"agentB\",\"skills\":[{\"name\":\"compute.run\",\"lez_price\":\"80\"}],\"x-lez-identity\":{\"npk\":\"$BNPK\",\"vpk\":\"$BVPK\"}}"
+"$LC" --config-dir ~/cfgA call agent_module agent_task "$GATECARD" compute.run '{"q":"x"}' >/dev/null 2>&1
+"$LC" --config-dir ~/cfgA call agent_module meta_status >~/msA.json 2>/dev/null
+PA=$(python3 -c "import json;t=open('$HOME/msA.json').read();
+try:
+ r=json.loads(json.loads([l for l in t.splitlines() if l.strip().startswith('{')][-1])['result'])['result']; print(len(r.get('pending_approvals',[])))
+except: print(0)" 2>/dev/null)
+say "pending_approvals after over-limit task: $PA"
+
+st "STAGE 8: under-limit — agent A pays agent B 5 LEZ autonomously (ONE real proof, testnet)"
+PAYCARD="{\"name\":\"agentB\",\"skills\":[{\"name\":\"compute.run\",\"lez_price\":\"5\"}],\"x-lez-identity\":{\"npk\":\"$BNPK\",\"vpk\":\"$BVPK\"}}"
+# single autonomous within-limit pay through agent A's module (one proof at a time — no self-saturation)
+"$LC" --config-dir ~/cfgA call agent_module agent_task "$PAYCARD" compute.run '{"q":"x"}' >~/paytask.log 2>&1 &
+PAYPID=$!
+say "agent_task launched (pid $PAYPID) — agent A pays the discovered peer within its limit"
+sleep 8; head -4 ~/paytask.log >>"$R" 2>/dev/null
+
+st "STAGE 9: confirm agent B received (poll balance through B's module)"
+BBAL=0
+for i in $(seq 1 40); do
+  "$LC" --config-dir ~/cfgB call lez_wallet_module sync_private >/dev/null 2>&1
+  BBAL=$("$LC" --config-dir ~/cfgB call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
+  [ -n "$BBAL" ] && [ "$BBAL" != "0" ] && break
+  sleep 8
+done
+say "agent B balance through its module: ${BBAL:-0}"
+tail -4 ~/paytask.log >>"$R" 2>/dev/null; tail -4 ~/sendto.log >>"$R" 2>/dev/null
+
+st "RESULT"
+say "A_funded_tx=${TXA:-none}  peer_count=$PC  over_limit_held=$PA  B_balance=${BBAL:-0}"
+{ [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${BBAL:-0}" != "0" ]; } && say "F8_INTEGRATED_PASS" || say "F8_PARTIAL"
+pkill -9 -f "logoscore -D" 2>/dev/null
+echo "DONE" >>"$R"
