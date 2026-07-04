@@ -47,10 +47,14 @@ critical new build (LEARNING §6d).
   (a) owner messages (chat push events `chatNewMessage`), (b) peer A2A messages, (c) delivery
   topic events (discovery, task streams), (d) timers for autonomous monitoring (DAO/alerter use
   cases). All async via `LogosModuleContext` event subscriptions; no blocking calls on the loop.
-- **Inference is pluggable** (prize requirement, out of scope to pick a model): an
-  `InferenceAdapter` interface with a `complete(prompt, tools) -> action` method. Implementations:
-  local (llama.cpp/ollama via subprocess) or API (HTTP). The adapter only decides *which skill to
-  invoke with which params*; it never touches keys or the chain directly.
+- **Inference is pluggable** (prize requirement, out of scope to pick a model): the
+  `IInferenceAdapter` contract (`scaffold/interfaces/inference.h`) with a
+  `plan(request, skills) -> action` method. A deployer binds their own backend at runtime via
+  `meta.configure("inference_adapter", "<module>")` — local (llama.cpp/Ollama subprocess or
+  localhost HTTP), an OpenAI-compatible API, or a deterministic mock for tests. The adapter only
+  decides *which skill to invoke with which params*; it never touches keys or the chain — every
+  effect flows back through the agent's gated skill dispatch, so the security model holds whichever
+  model is chosen.
 - **Reliability** (prize: recover from restarts, isolate skill failures):
   - Pending-task state persisted to `storage_module` (or a local JSON in the module data dir),
     keyed by A2A `taskId`; reloaded on start.
