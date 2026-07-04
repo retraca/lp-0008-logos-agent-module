@@ -1,19 +1,71 @@
 # LP-0008 demo video, narration script
 
 The submission is one main video plus three short use-case cuts. Record your voice over each
-silent screencast; the prize requires narration ("a silent screencast is not sufficient").
-Speak in your own words. Blocks are keyed 1:1 to the numbered headers on screen.
+screencast; the prize requires narration ("a silent screencast is not sufficient"). Speak in your
+own words. Blocks are keyed 1:1 to the numbered headers on screen.
 
-- Main flow: `docs/lp0008-agent-demo.mp4` (~62s) — the agent through its own skills.
-- Use-case cuts: `docs/lp0008-uc-storage.mp4`, `docs/lp0008-uc-messaging.mp4`, `docs/lp0008-uc-blockchain.mp4`.
+**Record the primary video FRESH against the current build** — do NOT reuse the older cuts whose
+on-camera hashes predate LEZ v0.2.0 (that credibility gap is exactly what sinks the competing
+submission). The primary video is the evaluator's own test, recorded live:
 
-Honest note to keep in mind while narrating: the standalone sequencer runs in dev mode so the
-block loop stays fast on camera, but the funding transfer in step 5 runs with `RISC0_DEV_MODE=0`
-and you see the real zk prover execute. That split is intentional and documented.
+Primary recording — the clean-clone run (shot-list):
+```
+git clone <repo> /tmp/lp0008-demo && cd /tmp/lp0008-demo
+asciinema rec demo.cast -c "RISC0_DEV_MODE=0 ./demo.sh < /dev/null" --overwrite
+agg --idle-time-limit 4 --cols 100 --rows 30 --font-size 20 --theme monokai demo.cast demo.gif
+ffmpeg -i demo.gif -pix_fmt yuv420p -vf "scale=1920:1080:force_original_aspect_ratio=decrease,\
+pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=#0d1117,setsar=1" docs/lp0008-v020-demo.mp4
+```
+Run it on a machine with a stable shell + nix + risc0 + logoscore. `RISC0_DEV_MODE=0` must stay
+visible; the real RISC0 prover output (segments, cycle counts) appears during the funding step.
+
+- Primary flow: `docs/lp0008-v020-demo.mp4` — a fresh clone → `./demo.sh` → six modules load, the
+  agent funds its own shielded account from genesis on the LIVE v0.2.0 testnet with a real proof,
+  tx confirmed on-chain, all `RISC0_DEV_MODE=0`.
+- Use-case cuts (storage / messaging / blockchain): `docs/lp0008-uc-*.mp4`.
+- CU: point at `docs/CU_COSTS.md` — real measured per-op cycle counts (transfer 131,072 total /
+  80,734 user; public program calls + deploys = 0 client proving cycles). Not "TBD".
 
 ---
 
-# Video 1 — Main flow (`lp0008-agent-demo.mp4`, ~62s)
+# Video 1 — Primary: the clean-clone run (`lp0008-v020-demo.mp4`)
+
+This is the evaluator's own test on camera: clone the repo, run the one demo script, nothing
+edited. Narrate the on-screen steps.
+
+**Title.**
+"This is LP-0008. I'll do exactly what an evaluator does: clone the repository and run the demo
+script from a clean machine, unmodified. Everything you'll see is a real RISC0 proof, dev mode off."
+
+**1 · setup from a clean clone.**
+"The script builds the LEZ stack at v0.2.0, the exact version the hosted testnet runs, plus the
+agent module and the platform modules, and assembles the runtime bundle. This is a fresh clone —
+no pre-built artifacts."
+
+**2 · six modules load together (F1).**
+"It boots Logos Core and loads all six modules in one daemon — the agent beside the wallet,
+storage, chat, and delivery, unmodified. Six loaded, zero crashed."
+
+**3 · the agent's own shielded identity (F2, F7).**
+"The agent creates its own shielded LEZ account. Its A2A card carries the identity — the nullifier
+public key and a post-quantum ML-KEM viewing key. A real account the agent controls."
+
+**4 · funded on the LIVE testnet, real proof (F2, P1).**
+"Now it funds the agent a hundred tokens from genesis, on the live testnet, dev mode zero. The real
+zk prover runs — you can see the segments and cycle counts, that's the compute-unit cost. The
+funding transaction confirms on-chain by getTransaction."
+
+**5 · the agent reads its balance through its own skill.**
+"And the agent reads its balance back through its own module skill: a hundred. The whole run exits
+zero — clone, build, load, fund, confirm, all from a clean environment with real proofs."
+
+**Close.**
+"That's the reproducible demo the prize asks for, passing unmodified. Compute costs are measured,
+not estimated — real cycle counts per operation, in the docs."
+
+---
+
+# Video 2 — The agent through its own skills (`lp0008-agent-demo.mp4`, ~62s)
 
 **Title.**
 "This is LP-0008, an autonomous AI agent that runs as a Logos Core module. It owns a shielded
@@ -52,7 +104,7 @@ a peer autonomously. The agent genuinely owns and operates a funded shielded acc
 
 ---
 
-# Video 2 — Storage use case (`lp0008-uc-storage.mp4`, ~90s)
+# Video 3 — Storage use case (`lp0008-uc-storage.mp4`, ~90s)
 
 **Intro.**
 "This is the storage use case, a personal file vault. The owner sends a file to the agent, the
@@ -69,7 +121,7 @@ byte for byte. That's a real Codex upload and download through the agent's own s
 
 ---
 
-# Video 3 — Messaging use case (`lp0008-uc-messaging.mp4`, ~100s)
+# Video 4 — Messaging use case (`lp0008-uc-messaging.mp4`, ~100s)
 
 **Intro.**
 "This is the messaging use case, a paid skill marketplace. Agents advertise skills with a price
@@ -88,7 +140,7 @@ request, pay, with payment and privacy that vanilla A2A can't offer."
 
 ---
 
-# Video 4 — Blockchain use case (`lp0008-uc-blockchain.mp4`, ~70s)
+# Video 5 — Blockchain use case (`lp0008-uc-blockchain.mp4`, ~70s)
 
 **Intro.**
 "This is the blockchain use case, autonomous on-chain payments. The agent holds a shielded LEZ
