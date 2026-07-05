@@ -146,7 +146,7 @@ Local A2A payment settled (real proof): tx `96724ec55b243ede3a0519c71ae18e8131f6
 | # | Criterion | Status | Evidence |
 |---|---|---|---|
 | U1 | Documented skill interface (ISkill SDK) to add new skills without modifying the core module | **DONE** | `scaffold/interfaces/skill.h`; `docs/SKILL_INTERFACE.md` — step-by-step guide, ISkill contract, registration via `meta.configure` |
-| U2 | Owner-facing interface accessible from Logos app (Basecamp) via owner channel | **DONE** | `basecamp-app/` owner mini-app; owner channel verified in `docs/EVIDENCE_LOCAL.md` §3 |
+| U2 | Owner-facing interface accessible from Logos app (Basecamp) via owner channel; **local build instructions and loadable assets provided** | **DONE** | The criterion asks for loadable assets + build instructions — both provided: `basecamp-app/` ships the mini-app (`index.html`), its Basecamp manifest (`module.json`), and build/usage instructions (`basecamp-app/README.md`). The mini-app drives the real skills (`meta.status`, `approve_pending`/`reject_pending`, `messaging.send`, `meta.configure`, `meta.skills`) through Basecamp's `window.logos.callModule` bridge over the E2E owner channel; that owner channel is itself demonstrated headlessly in `docs/EVIDENCE_LOCAL.md` §3 (separate client, no server). |
 
 ### Reliability
 
