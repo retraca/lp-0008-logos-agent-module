@@ -53,7 +53,7 @@ PATH=$GENERATOR:$PATH ninja -C build
 # Output: build/liblez_wallet_module_plugin.so
 ```
 
-Repeat for `lp-0008-ai-module/scaffold/` (same cmake flags, no `LEZ_WALLET_CORE_DIR`).
+Repeat for `scaffold/` (same cmake flags, no `LEZ_WALLET_CORE_DIR`).
 
 ## 4. Build the CLI
 
@@ -96,7 +96,7 @@ mkdir -p $AGENT_HOME
 ```bash
 logoscore -D \
   -m lez-wallet-module/qt-module/liblez_wallet_module_plugin.so \
-  -m lp-0008-ai-module/scaffold/libagent_module_plugin.so
+  -m scaffold/libagent_module_plugin.so
 
 # Configure the agent
 logoscore -c 'lez_wallet_module.ensure_account("your-passphrase")'

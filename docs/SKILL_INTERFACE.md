@@ -167,7 +167,7 @@ ninja -C build
 ```bash
 logoscore -D \
   -m lez-wallet-module/qt-module/build/liblez_wallet_module_plugin.so \
-  -m lp-0008-ai-module/scaffold/build/libagent_module_plugin.so \
+  -m scaffold/build/libagent_module_plugin.so \
   -m my_skill_module/build/libmy_skill_module_plugin.so
 ```
 

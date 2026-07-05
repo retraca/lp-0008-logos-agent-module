@@ -36,7 +36,7 @@ agent's shielded account in the same command (see TODO note below).
 - `SEQUENCER` env var (or `--sequencer`) pointing at a running LEZ sequencer.
   Default: `http://127.0.0.1:3040` (the `lez-build` docker-compose chain).
 - A `--modules-dir` containing:
-  - `libagent_module_plugin.so` (or `.dylib`) — built from `lp-0008-ai-module/scaffold/`
+  - `libagent_module_plugin.so` (or `.dylib`) — built from `scaffold/`
   - `liblez_wallet_module_plugin.so` (or `.dylib`) — built from `lez-wallet-module/qt-module/`
   - `metadata.json` for each module
 
