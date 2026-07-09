@@ -91,7 +91,7 @@ st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is
 # NB: bare numerics fail the CLI JSON type check (type must be string); the module's
 # parse_amount strips one pair of surrounding quotes, so pass the value as '"50"'.
 "$LC" --config-dir ~/cfgA call agent_module meta_configure per_tx_limit '"50"' >~/limitset.log 2>&1
-grep -q '"per_tx_limit"' ~/limitset.log && say "per_tx_limit set ok" || say "STAGE4_FAIL: per_tx_limit not set: $(tail -c 200 ~/limitset.log)"
+grep -q 'per_tx_limit' ~/limitset.log && ! grep -q 'type_error\|dispatch_failed' ~/limitset.log && say "per_tx_limit set ok" || say "STAGE4_FAIL: per_tx_limit not set: $(tail -c 200 ~/limitset.log)"
 "$LC" --config-dir ~/cfgA call agent_module meta_configure agent_npk "$ANPK" >/dev/null 2>&1
 
 st "STAGE 5: local Waku — two delivery nodes, B statically connects to A"
@@ -141,6 +141,16 @@ PAYPID=$!
 say "agent_task launched (pid $PAYPID) — agent A pays the discovered peer within its limit"
 sleep 8; head -4 ~/paytask.log >>"$R" 2>/dev/null
 
+st "STAGE 9a: agent A's balance drops by the price (the spend side settles + syncs first)"
+ABAL2=100
+for i in $(seq 1 40); do
+  "$LC" --config-dir ~/cfgA call lez_wallet_module sync_private >/dev/null 2>&1
+  ABAL2=$("$LC" --config-dir ~/cfgA call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
+  [ -n "$ABAL2" ] && [ "$ABAL2" != "100" ] && [ "$ABAL2" != "0" ] && break
+  sleep 8
+done
+say "agent A balance after autonomous pay: ${ABAL2:-?} (was 100)"
+
 st "STAGE 9: confirm agent B received (poll balance through B's module)"
 BBAL=0
 for i in $(seq 1 80); do
@@ -154,7 +164,10 @@ tail -4 ~/paytask.log >>"$R" 2>/dev/null; tail -4 ~/sendto.log >>"$R" 2>/dev/nul
 
 st "RESULT"
 say "A_funded_tx=${TXA:-none}  peer_count=$PC  over_limit_held=$PA  B_balance=${BBAL:-0}"
-if [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${BBAL:-0}" != "0" ]; then say "F8_INTEGRATED_PASS"; RC=0; else say "F8_PARTIAL"; RC=1; fi
+PAID=0
+{ [ "${BBAL:-0}" != "0" ]; } && PAID=1
+{ [ -n "${ABAL2:-}" ] && [ "${ABAL2:-100}" != "100" ] && [ "${ABAL2:-0}" != "0" ]; } && PAID=1
+if [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${PA:-0}" -ge 1 ] && [ "$PAID" = 1 ]; then say "F8_INTEGRATED_PASS"; RC=0; else say "F8_PARTIAL"; RC=1; fi
 pkill -9 -f "logoscore -D" 2>/dev/null
 echo "DONE" >>"$R"
 exit "${RC:-1}"
