@@ -82,9 +82,11 @@ st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is
 
 st "STAGE 5: local Waku — two delivery nodes, B statically connects to A"
 "$LC" --config-dir ~/cfgA call delivery_module createNode '{"logLevel":"ERROR","mode":"Core","relay":true,"clusterId":16,"numShardsInNetwork":8,"tcpPort":60010,"discv5UdpPort":60011,"restPort":60012,"metricsServerPort":60013,"websocketPort":60014}' >~/nodeA.log 2>&1
-sleep 5
-APID=$(grep -oE "16U[A-Za-z0-9]+" ~/nodeA.log | head -1)
+# the multiaddr is logged by the daemon, not returned by the RPC — poll daemonA.log (cf. demo-f8-linux-full.sh)
+APID=""
+for k in $(seq 1 15); do APID=$(grep -oE '/p2p/16Uiu2[A-Za-z0-9]+' ~/daemonA.log 2>/dev/null | head -1 | sed 's#/p2p/##'); [ -n "$APID" ] && break; sleep 2; done
 say "agent A waku peer id: ${APID:-NONE}"
+[ -n "$APID" ] || { say "STAGE5_FAIL: no waku peer id in daemonA.log"; }
 "$LC" --config-dir ~/cfgB call delivery_module createNode "{\"logLevel\":\"ERROR\",\"mode\":\"Core\",\"relay\":true,\"clusterId\":16,\"numShardsInNetwork\":8,\"tcpPort\":60020,\"discv5UdpPort\":60021,\"restPort\":60022,\"metricsServerPort\":60023,\"websocketPort\":60024,\"staticnodes\":[\"/ip4/127.0.0.1/tcp/60010/p2p/$APID\"]}" >~/nodeB.log 2>&1
 sleep 6
 
@@ -130,6 +132,7 @@ tail -4 ~/paytask.log >>"$R" 2>/dev/null; tail -4 ~/sendto.log >>"$R" 2>/dev/nul
 
 st "RESULT"
 say "A_funded_tx=${TXA:-none}  peer_count=$PC  over_limit_held=$PA  B_balance=${BBAL:-0}"
-{ [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${BBAL:-0}" != "0" ]; } && say "F8_INTEGRATED_PASS" || say "F8_PARTIAL"
+if [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${BBAL:-0}" != "0" ]; then say "F8_INTEGRATED_PASS"; RC=0; else say "F8_PARTIAL"; RC=1; fi
 pkill -9 -f "logoscore -D" 2>/dev/null
 echo "DONE" >>"$R"
+exit "${RC:-1}"
