@@ -139,13 +139,39 @@ Say over the on-screen stages:
 - (RESULT line) read it as printed — e.g. "discovery, the A2A task, and the gate — integrated,
   on the live testnet. That's what this trace adds on top of the local end-to-end run."
 
-## Video 4 — Personal file vault + owner channel  (SR3 · F9 · F4)
+## Video 4 — Use cases ON the live testnet  (F9 · SR3: vault + alerter)
 
-Two spec-named use cases: **"Personal file vault"** (storage) and the owner-channel
-interaction (messaging — the flow behind the **"On-chain event alerter"**: the agent
-notifies its owner over Logos Messaging). Honest framing: these run against the local
-stack (Codex/Waku peers); the settlement-bearing use case (marketplace) is the one that
-runs fully on the hosted testnet.
+Two spec-named use cases with the agent DEPLOYED ON THE HOSTED TESTNET — no framing
+needed: the alerter watches a real on-chain state change (the genesis funding tx), the
+vault runs under the same testnet-funded agent. Verified exit 0 (UC1 owner notified,
+UC2 byte-exact, funding tx getTransaction-confirmable).
+
+Paste:
+
+```bash
+cd ~/lp0008-demo && bash tests/demo-usecases-testnet.sh
+```
+
+Say over the on-screen stages:
+
+- (deploy) "Same boot as the primary — the agent wired to the live hosted testnet."
+- (UC1 armed) "Use case: the on-chain event alerter. The agent's watch loop reads its LEZ
+  account on the testnet — balance zero."
+- (funding, prover lines streaming) "Now a real on-chain event: genesis funds the agent —
+  that's the prover again, dev mode zero."
+- (state change) "The watch loop sees the state change on the live chain — zero to a
+  hundred — and the agent alerts its owner over Logos Messaging. No server, no webhook —
+  an encrypted message to the owner's key."
+- (UC2 vault) "Use case: the personal file vault, by this same testnet-funded agent. The
+  owner hands it a file, it returns a content address, and the retrieval is byte-exact."
+- (close/PASS) "With the paid-marketplace trace you saw in the previous video, that's
+  three of the prize's use cases, end to end, with the agent live on the testnet."
+
+## Video 5 — Reliability + the full local payment flow  (R1 · R2 · R3 · F5 · F9)
+
+The full 12-step local run: single-command deploy, vault, discovery, the gate holding
+with owner notification, the under-limit payment with BOTH balances moving, the 10b
+alerter, restart-recovery, and skill isolation.
 
 Paste:
 

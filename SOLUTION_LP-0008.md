@@ -82,7 +82,12 @@ agent with real proofs on LEZ v0.2.0. In brief:
   The in-module pay hop is capped by the ~20s inter-module RPC window vs 90s+ real proofs
   (documented below); the complete payment flow runs end-to-end on the local chain
   (`tests/demo-f8-linux-full.sh`) and as a real on-chain transfer in the primary demo.
-- **F9-F11:** storage, messaging, and blockchain use cases demonstrated end-to-end; three shielded
+- **F9-F11:** three illustrative use cases E2E **with the agent deployed on the live v0.2.0
+  testnet** (`tests/demo-usecases-testnet.sh`, exit 0): the on-chain event alerter fires on a
+  real funding tx observed through the agent's own module (0→100, owner notified over Logos
+  Messaging), the personal file vault round-trips byte-exact under the same testnet-funded
+  agent, and the paid skill marketplace is the F8 integrated trace on the same chain.
+  Storage, messaging, and blockchain use cases also demonstrated end-to-end locally; three shielded
   agents (one per category) funded from genesis on the **live v0.2.0 testnet**, every funding tx
   `getTransaction`-confirmed (`docs/TESTNET_EVIDENCE_V020.md`); also reproducible on a standalone
   sequencer (`docs/LOCAL_F10_EVIDENCE.md`); full docs + clean public repo.
