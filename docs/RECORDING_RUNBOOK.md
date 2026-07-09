@@ -176,11 +176,17 @@ cd ~/lp0008-demo && bash tests/demo-f8-linux-full.sh
 2. Host on YouTube/Loom, link them in `SOLUTION_LP-0008.md`, commit, push.
 3. Reopen the PR to logos-co/lambda-prize (resubmission explicitly invited in #88).
 
-## Pre-recording verification status (updated as runs complete)
+## Pre-recording verification status — ALL VERIFIED 2026-07-09
 
-- [x] Video 1 block — `demo.sh` exit 0 verified on the builder box (testnet-funded, tx
-      confirmed) — last verified this cycle
-- [ ] Video 2 block — prover segment re-run pending
-- [ ] Video 3 block — `demo-f8-testnet.sh` single-instance tmux run pending (the earlier
-      hangs were traced to concurrent automated-SSH instances, not the script)
-- [ ] Video 4 block — `demo-f8-linux-full.sh` storage/messaging segments re-run pending
+Every paste block below was executed end-to-end on the recording box at HEAD 4b113f8
+before hand-off. Do not edit the scripts before recording.
+
+- [x] Video 1 — `demo.sh` exit 0 from a fresh clone: setup builds, 6/0 modules, agent
+      funded from genesis on the LIVE testnet (real proof, prover output visible on
+      screen), tx getTransaction-confirmed, balance read through the module
+- [x] Video 2 — prover block: real segments + cycle counts (4 consecutive passes)
+- [x] Video 3 — `demo-f8-testnet.sh` exit 0: **F8_INTEGRATED_PASS** — Waku discovery
+      (peer_count=1), A2A task, gate HELD (pending=1), autonomous spend — live testnet,
+      output streaming to stdout
+- [x] Video 4 — `demo-f8-linux-full.sh` exit 0: all steps incl. 10b on-chain event
+      alerter (`delivered_to_owner_channel: true`), restart-recovery, skill isolation
