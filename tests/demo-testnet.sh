@@ -88,7 +88,12 @@ echo '{"sequencer_addr":"'"$TESTNET"'","seq_poll_timeout":"60s","seq_tx_poll_max
 export LEE_WALLET_HOME_DIR="$FUND_HOME"
 printf "%s\n" "$PW" | "$WALLET" config get >/dev/null 2>&1
 printf "%s\n" "$PW" | "$WALLET" account import public --private-key "$GENHEX" >/dev/null 2>&1
-TX=$(printf "%s\n" "$PW" | RISC0_DEV_MODE=0 "$WALLET" auth-transfer send --from "$GEN" --to-npk "$ANPK" --to-vpk "$AVPK" --amount 100 2>&1 | grep -oiE "hash is [0-9a-f]{64}" | awk '{print $3}')
+# stream the prover's own lines to the screen while it runs — S6 requires proof generation
+# to be VISIBLE (segments + cycle counts), not narrated over a blank wait
+printf "%s\n" "$PW" | RISC0_DEV_MODE=0 RISC0_INFO=1 RUST_LOG=info,risc0_zkvm=info NO_COLOR=1 RUST_LOG_STYLE=never \
+  "$WALLET" auth-transfer send --from "$GEN" --to-npk "$ANPK" --to-vpk "$AVPK" --amount 100 2>&1 | tee /tmp/lp0008-fund-v1.log | \
+  grep --line-buffered -E "risc0_zkvm|segments|cycles|[Hh]ash is" | sed -u 's/^.*risc0_zkvm[^ ]* *//'
+TX=$(grep -oiE "hash is [0-9a-f]{64}" /tmp/lp0008-fund-v1.log | awk '{print $3}' | head -1)
 [ -n "$TX" ] || die "funding transfer did not return a tx hash (see wallet output)"
 ok "funding tx $TX"
 say "confirm on-chain via getTransaction (polling — it settles after the proof lands in a block) …"

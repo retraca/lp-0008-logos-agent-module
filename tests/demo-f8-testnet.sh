@@ -23,8 +23,10 @@ GEN="Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV"
 GENHEX="10a26a9aec7d34b82364eeae45c5294dbb0a764b000b94eeb9b58511dc487c4d"
 PW="demo-pass"; TOPIC="/logos/1/agent-discovery/proto"
 R=~/f8-testnet.out; : > "$R"
-st(){ echo "" >>"$R"; echo ">>> $* <<<" >>"$R"; }
-say(){ echo "$*" >>"$R"; }
+# stdout AND the report file — the demo must be watchable live (a silent screen fails the
+# narrated-demo policy), while the report keeps the machine-readable trace.
+st(){ { echo ""; echo ">>> $* <<<"; } | tee -a "$R"; }
+say(){ echo "$*" | tee -a "$R"; }
 
 say "LC=$LC"; say "MD=$MD"; say "W=$W"
 [ -n "$MD" ] && [ -n "$LC" ] || { say "MISSING LC or MD"; echo STAGE_FAIL_SETUP >>"$R"; exit 1; }
