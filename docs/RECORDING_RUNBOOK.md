@@ -35,11 +35,14 @@ Between takes: `pkill -9 -f "logoscore -D"; rm -rf ~/.logoscore`
 ## Narration must include architecture (SR3 — do not skip)
 
 The prize text: the builder "narrates what they built and why, walks through the
-architecture and key implementation decisions". Pure demo narration fails this. Open
-**every** video (or at least the primary) with ~30s of architecture while the title/README
-is on screen:
+architecture and key implementation decisions". Pure demo narration fails this. Open the
+primary with the full ~30s block below, and EVERY other video with a one-line recap
+("This is LP-0008 — an autonomous agent running as a native Logos Core module with its own
+shielded account, an A2A coordination layer over Waku, and an owner-set spending gate."):
 
-> "What I built: an autonomous agent that runs as a native Logos Core module — a Qt plugin
+> "What I built, and why: agents that hold their own keys and pay for their own services,
+> with no custodian and no payment processor — an autonomous agent that runs as a native
+> Logos Core module — a Qt plugin
 > loaded by the same daemon as the wallet, storage, chat and delivery modules, talking to
 > them over Qt Remote Objects. Three key decisions: first, the agent owns its own shielded
 > LEZ account — it isn't a proxy for the owner's wallet, every payment it makes is a real
@@ -86,10 +89,16 @@ Say, as each on-screen header appears:
 Simplest: same take as Video 1, right after PASS. Paste:
 
 ```bash
-# from the funded wallet home of the Video-1 run (see docs/CU_COSTS.md "Measurement"):
-RISC0_DEV_MODE=0 RISC0_INFO=1 RUST_LOG=info,risc0_zkvm=info \
-  ~/logos-execution-zone/target/release/wallet auth-transfer send \
-  --from <funded-account> --to-npk <npk> --to-vpk <vpk> --amount 5
+# self-contained: fresh recipient, then a shielded transfer from genesis with the prover
+# streaming its segments + cycle counts (see docs/CU_COSTS.md "Measurement")
+export LEE_WALLET_HOME_DIR=$(mktemp -d) W=~/logos-execution-zone/target/release/wallet
+echo '{"sequencer_addr":"https://testnet.lez.logos.co/","seq_poll_timeout":"60s","seq_tx_poll_max_blocks":80,"seq_poll_max_retries":40,"seq_block_poll_max_amount":200}' > $LEE_WALLET_HOME_DIR/wallet_config.json
+printf "demo-pass\n" | $W account import public --private-key 10a26a9aec7d34b82364eeae45c5294dbb0a764b000b94eeb9b58511dc487c4d
+RCPT=$(printf "demo-pass\ndemo-pass\n" | $W account new private -l rcpt 2>&1)
+NPK=$(echo "$RCPT" | grep -oE 'npk [0-9a-f]{64}' | awk '{print $2}'); VPK=$(echo "$RCPT" | grep -oE 'vpk [0-9a-f]+' | awk '{print $2}')
+printf "demo-pass\n" | RISC0_DEV_MODE=0 RISC0_INFO=1 RUST_LOG=info,risc0_zkvm=info \
+  $W auth-transfer send --from Public/6iArKUXxhUJqS7kCaPNhwMWt3ro71PDyBj7jwAyE2VQV \
+  --to-npk $NPK --to-vpk $VPK --amount 5
 ```
 
 Say while the cycle counts stream:
@@ -121,11 +130,14 @@ Say over the on-screen stages:
 - (gate stage) "Agent A's owner set a spending limit of fifty. This task is priced eighty —
   over the limit — so the gate holds it: pending approval, never executed. That's the
   threshold mechanism, integrated, on the live chain."
-- (task/pay stage) "Under the limit, the agent opens the A2A task and pays from its own
-  shielded account. One honest platform note: the module-to-wallet hop is capped at about
-  twenty seconds, and a real proof takes ninety — you saw the full payment settle as a real
-  proof in the primary demo, and end-to-end on the local chain in the use-case cut. What
-  this trace adds is discovery, the task lifecycle, and the gate — all live on testnet."
+- (before the pay stage) "One honest platform note before the payment: the module-to-wallet
+  hop is capped at about twenty seconds, and a real proof takes ninety — so on the shared
+  testnet the in-module pay can get cut mid-proof. You saw the full payment settle as a real
+  proof in the primary demo, and end-to-end on the local chain in the use-case video."
+- (task/pay stage) "Under the limit, the agent opens the A2A task against the discovered
+  card and initiates the pay from its own shielded account."
+- (RESULT line) read it as printed — e.g. "discovery, the A2A task, and the gate — integrated,
+  on the live testnet. That's what this trace adds on top of the local end-to-end run."
 
 ## Video 4 — Personal file vault + owner channel  (SR3 · F9 · F4)
 
@@ -141,15 +153,21 @@ Paste:
 cd ~/lp0008-demo && bash tests/demo-f8-linux-full.sh
 ```
 
-- (storage segment) "Use case: the personal file vault. The owner hands the agent a
+- (step 6, storage) "Use case one: the personal file vault. The owner hands the agent a
   document; the agent stores it through the Logos storage module and returns a content
-  address — retrievable from any device, content-addressed."
-- (messaging segment) "The owner channel: I message the agent from a separate client over
-  the private delivery channel and get a live reply — no intermediary server. This is the
-  same channel the agent uses to alert its owner of on-chain events."
-- (close) "Together with the marketplace payment you saw settle on the testnet, that's
-  three of the prize's illustrative use cases end to end: file vault, owner
-  messaging/alerts, and the paid skill marketplace."
+  address — retrieved back byte-exact."
+- (step 9, gate) "The spending gate: an over-limit task is held, the owner is notified over
+  Logos Messaging — three retry attempts, recorded — and the spend never executes."
+- (step 10, pay) "The under-limit payment: the same transfer the agent's pay skill issues,
+  run here through the wallet CLI from the agent's own account — a real proof, and both
+  balances move: A drops to ninety-five, B receives five."
+- (step 10b, alerter) "Use case two: the on-chain event alerter. The agent watches its LEZ
+  account, sees the balance change from the payment, and notifies the owner over Logos
+  Messaging — no server in between."
+- (steps 11-12) "Reliability on camera: kill the daemon, restart — the held approval
+  survives. And a failing skill errors in isolation while the module stays up."
+- (close) "That's three of the prize's illustrative use cases end to end: the personal
+  file vault, the on-chain event alerter, and the paid skill marketplace."
 
 ## After recording
 
