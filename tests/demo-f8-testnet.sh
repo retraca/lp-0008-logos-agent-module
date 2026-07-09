@@ -142,14 +142,17 @@ say "agent_task launched (pid $PAYPID) — agent A pays the discovered peer with
 sleep 8; head -4 ~/paytask.log >>"$R" 2>/dev/null
 
 st "STAGE 9a: agent A's balance drops by the price (the spend side settles + syncs first)"
-ABAL2=100
-for i in $(seq 1 40); do
+ABAL2=100; NOTE_CONSUMED=0
+for i in $(seq 1 150); do
   "$LC" --config-dir ~/cfgA call lez_wallet_module sync_private >/dev/null 2>&1
   ABAL2=$("$LC" --config-dir ~/cfgA call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
-  [ -n "$ABAL2" ] && [ "$ABAL2" != "100" ] && [ "$ABAL2" != "0" ] && break
-  sleep 8
+  # 100 -> 0 means the funding note was consumed by the spend (change note not yet scanned)
+  [ "$ABAL2" = "0" ] && NOTE_CONSUMED=1
+  # 95 = the change note synced back: the autonomous 5-LEZ pay is fully visible on A's side
+  [ "$ABAL2" = "95" ] && break
+  sleep 10
 done
-say "agent A balance after autonomous pay: ${ABAL2:-?} (was 100)"
+say "agent A balance after autonomous pay: ${ABAL2:-?} (was 100; 0=funding note consumed, 95=change synced)"
 
 st "STAGE 9: confirm agent B received (poll balance through B's module)"
 BBAL=0
@@ -166,7 +169,7 @@ st "RESULT"
 say "A_funded_tx=${TXA:-none}  peer_count=$PC  over_limit_held=$PA  B_balance=${BBAL:-0}"
 PAID=0
 { [ "${BBAL:-0}" != "0" ]; } && PAID=1
-{ [ -n "${ABAL2:-}" ] && [ "${ABAL2:-100}" != "100" ] && [ "${ABAL2:-0}" != "0" ]; } && PAID=1
+[ "${ABAL2:-100}" = "95" ] && PAID=1
 if [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${PA:-0}" -ge 1 ] && [ "$PAID" = 1 ]; then say "F8_INTEGRATED_PASS"; RC=0; else say "F8_PARTIAL"; RC=1; fi
 pkill -9 -f "logoscore -D" 2>/dev/null
 echo "DONE" >>"$R"
