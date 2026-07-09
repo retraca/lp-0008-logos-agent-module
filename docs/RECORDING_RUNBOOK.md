@@ -10,6 +10,13 @@ that automated SSH retries caused. The stack is already built there (`~/lp0008`)
 # from your Mac terminal (full-screen, font >=18pt, dark bg), then start recording:
 gcloud compute ssh lp0008-f8-builder --zone=europe-southwest1-b --tunnel-through-iap
 tmux new -A -s rec        # if the connection drops: reconnect and `tmux new -A -s rec`
+
+# once, in the tmux session — the box has FOUR nix-store logoscore builds and only the
+# plain -logos-logoscore-cli one supports our module variant (linux-amd64-dev); the
+# "portable-bundle" one GLIBC-crashes and the "cli-bin-portable" one rejects the modules:
+export LOGOSCORE_BIN=/nix/store/841y6inhnzhwsdisgs68gkx51244z75r-logos-logoscore-cli/bin/logoscore
+export LEZ_BUILD=~/logos-execution-zone MODULES_DIR=~/lp0008-modules
+export PATH="$HOME/.cargo/bin:$PATH"
 ```
 
 Each video is ONE paste — the script prints its own step headers, so you narrate over them
