@@ -219,3 +219,4 @@ printf "    ${D}    F10 hosted-testnet agents and U2 Basecamp owner UI: in the r
 p 3
 echo "DEMO_V3_DONE"
 pkill -9 -f "sequencer_service|logoscore|logos_host" 2>/dev/null
+exit 0
