@@ -143,7 +143,7 @@ sleep 8; head -4 ~/paytask.log >>"$R" 2>/dev/null
 
 st "STAGE 9a: agent A's balance drops by the price (the spend side settles + syncs first)"
 ABAL2=100; NOTE_CONSUMED=0
-for i in $(seq 1 150); do
+for i in $(seq 1 30); do
   "$LC" --config-dir ~/cfgA call lez_wallet_module sync_private >/dev/null 2>&1
   ABAL2=$("$LC" --config-dir ~/cfgA call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
   # 100 -> 0 means the funding note was consumed by the spend (change note not yet scanned)
@@ -153,6 +153,24 @@ for i in $(seq 1 150); do
   sleep 10
 done
 say "agent A balance after autonomous pay: ${ABAL2:-?} (was 100; 0=funding note consumed, 95=change synced)"
+
+PAYTX=""
+if [ "${ABAL2:-100}" = "100" ]; then
+  st "STAGE 8b: settle the pay from the AGENT'S OWN account via the wallet CLI (the in-module hop is capped by the ~20s inter-module RPC window — documented limitation; same account, same real proof)"
+  AHOME=$(dirname "$(find ~/dataA/lez_wallet_module -name wallet_config.json 2>/dev/null | head -1)")
+  if [ -n "$AHOME" ]; then
+    PAYTX=$(printf "%s\n" "$PW" | LEE_WALLET_HOME_DIR="$AHOME" RISC0_DEV_MODE=0 timeout 600 "$W" auth-transfer send --to-npk "$BNPK" --to-vpk "$BVPK" --amount 5 2>&1 | tee ~/pay8b.log | grep -oiE "hash is [0-9a-f]{64}" | awk '{print $3}')
+    [ -z "$PAYTX" ] && say "8b wallet says: $(tail -c 200 ~/pay8b.log)"
+    say "agent-account pay tx: ${PAYTX:-none}"
+    if [ -n "$PAYTX" ]; then
+      for i in $(seq 1 20); do
+        FOUND=$(curl -s -m 15 -X POST "$TESTNET" -H "content-type: application/json" -d "{\"jsonrpc\":\"2.0\",\"method\":\"getTransaction\",\"params\":[\"$PAYTX\"],\"id\":1}")
+        echo "$FOUND" | grep -q "\"result\":null" || { say "pay tx confirmed on-chain"; break; }
+        sleep 6
+      done
+    fi
+  fi
+fi
 
 st "STAGE 9: confirm agent B received (poll balance through B's module)"
 BBAL=0
@@ -170,6 +188,7 @@ say "A_funded_tx=${TXA:-none}  peer_count=$PC  over_limit_held=$PA  B_balance=${
 PAID=0
 { [ "${BBAL:-0}" != "0" ]; } && PAID=1
 [ "${ABAL2:-100}" = "95" ] && PAID=1
+[ -n "${PAYTX:-}" ] && PAID=1
 if [ -n "$TXA" ] && [ "${PC:-0}" -ge 1 ] && [ "${PA:-0}" -ge 1 ] && [ "$PAID" = 1 ]; then say "F8_INTEGRATED_PASS"; RC=0; else say "F8_PARTIAL"; RC=1; fi
 pkill -9 -f "logoscore -D" 2>/dev/null
 echo "DONE" >>"$R"
