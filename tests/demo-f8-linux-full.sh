@@ -189,7 +189,7 @@ say "the agent monitors its LEZ account; the payment just changed it. it alerts 
 tp "logoscore call lez_wallet_module balance   # the agent's watch loop sees the change"
 printf "    ${D}balance: %s (was 100) — state change detected on LEZ${N}\n" "${ABAL2:-95}" | o
 tp "logoscore call agent_module messaging_send \$OWNER 'alert: account balance changed 100 -> ${ABAL2:-95}'"
-"$LC" call agent_module messaging_send "$OWNER" "alert: account balance changed 100 -> ${ABAL2:-95} (autonomous pay settled)" 2>/dev/null | python3 -c 'import sys,json
+"$LC" call agent_module messaging_send "$OWNERNPK" "alert: account balance changed 100 -> ${ABAL2:-95} (autonomous pay settled)" 2>/dev/null | python3 -c 'import sys,json
 ls=[l for l in sys.stdin.read().splitlines() if l.strip().startswith("{")]
 o=json.loads(ls[-1]) if ls else {}
 r=o.get("result",{});
