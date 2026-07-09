@@ -110,14 +110,17 @@ cd ~/lp0008 && LEZ_BUILD=~/logos-execution-zone bash tests/demo-f8-testnet.sh
 Say over the on-screen stages:
 
 - "This is the paid skill marketplace use case from the prize spec. Two independent
-  agents, two daemons. They discover each other over Waku — agent A reads agent B's card,
-  with its declared LEZ price, from the shared discovery topic."
-- (gate stage) "Agent A's owner set a spending limit. This task is over the limit, so the
-  gate holds it — pending approval, never executed. That's the threshold mechanism, on
-  camera."
-- (payment stage) "Approved — and agent A pays agent B autonomously, from its own shielded
-  account, a real proof settling on the live testnet. Discovery, task, payment — no human
-  in the loop, no payment processor."
+  agents, two daemons, on the LIVE hosted testnet. They discover each other over Waku —
+  agent A reads agent B's card, with its declared LEZ price, from the shared discovery
+  topic."
+- (gate stage) "Agent A's owner set a spending limit of fifty. This task is priced eighty —
+  over the limit — so the gate holds it: pending approval, never executed. That's the
+  threshold mechanism, integrated, on the live chain."
+- (task/pay stage) "Under the limit, the agent opens the A2A task and pays from its own
+  shielded account. One honest platform note: the module-to-wallet hop is capped at about
+  twenty seconds, and a real proof takes ninety — you saw the full payment settle as a real
+  proof in the primary demo, and end-to-end on the local chain in the use-case cut. What
+  this trace adds is discovery, the task lifecycle, and the gate — all live on testnet."
 
 ## Video 4 — Personal file vault + owner channel  (SR3 · F9 · F4)
 
