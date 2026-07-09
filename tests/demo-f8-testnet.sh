@@ -76,6 +76,17 @@ printf "%s\n" "$PW" | $W config set sequencer_addr "$TESTNET" >/dev/null 2>&1
 TXA=$(printf "%s\n" "$PW" | RISC0_DEV_MODE=0 $W auth-transfer send --from "$GEN" --to-npk "$ANPK" --to-vpk "$AVPK" --amount 100 2>&1 | grep -oiE "hash is [0-9a-f]{64}" | awk '{print $3}')
 say "fund A tx: ${TXA:-FAILED}"
 
+st "STAGE 3.5: wait until agent A SEES its balance through its module (testnet note sync lags)"
+ABAL=0
+for i in $(seq 1 60); do
+  "$LC" --config-dir ~/cfgA call lez_wallet_module sync_private >/dev/null 2>&1
+  ABAL=$("$LC" --config-dir ~/cfgA call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
+  [ -n "$ABAL" ] && [ "$ABAL" != "0" ] && break
+  sleep 6
+done
+say "agent A balance through its module: ${ABAL:-0}"
+[ "${ABAL:-0}" != "0" ] || say "STAGE3.5_WARN: A note not synced — pay/gate stages will likely stall"
+
 st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is held)"
 "$LC" --config-dir ~/cfgA call agent_module meta_configure per_tx_limit 50 >/dev/null 2>&1
 "$LC" --config-dir ~/cfgA call agent_module meta_configure agent_npk "$ANPK" >/dev/null 2>&1
@@ -108,11 +119,15 @@ say "agent A peer_count=$PC"
 st "STAGE 7: over-limit task is HELD (F5) — card priced 80 > limit 50"
 GATECARD="{\"name\":\"agentB\",\"skills\":[{\"name\":\"compute.run\",\"lez_price\":\"80\"}],\"x-lez-identity\":{\"npk\":\"$BNPK\",\"vpk\":\"$BVPK\"}}"
 "$LC" --config-dir ~/cfgA call agent_module agent_task "$GATECARD" compute.run '{"q":"x"}' >/dev/null 2>&1
-"$LC" --config-dir ~/cfgA call agent_module meta_status >~/msA.json 2>/dev/null
-PA=$(python3 -c "import json;t=open('$HOME/msA.json').read();
+PA=0
+for i in $(seq 1 20); do
+  "$LC" --config-dir ~/cfgA call agent_module meta_status >~/msA.json 2>/dev/null
+  PA=$(python3 -c "import json;t=open('$HOME/msA.json').read();
 try:
  r=json.loads(json.loads([l for l in t.splitlines() if l.strip().startswith('{')][-1])['result'])['result']; print(len(r.get('pending_approvals',[])))
 except: print(0)" 2>/dev/null)
+  [ "${PA:-0}" -ge 1 ] 2>/dev/null && break; sleep 6
+done
 say "pending_approvals after over-limit task: $PA"
 
 st "STAGE 8: under-limit — agent A pays agent B 5 LEZ autonomously (ONE real proof, testnet)"
@@ -125,7 +140,7 @@ sleep 8; head -4 ~/paytask.log >>"$R" 2>/dev/null
 
 st "STAGE 9: confirm agent B received (poll balance through B's module)"
 BBAL=0
-for i in $(seq 1 40); do
+for i in $(seq 1 80); do
   "$LC" --config-dir ~/cfgB call lez_wallet_module sync_private >/dev/null 2>&1
   BBAL=$("$LC" --config-dir ~/cfgB call lez_wallet_module balance 2>/dev/null | grep -oE '"result":"[0-9]+"' | grep -oE '[0-9]+' | head -1)
   [ -n "$BBAL" ] && [ "$BBAL" != "0" ] && break
