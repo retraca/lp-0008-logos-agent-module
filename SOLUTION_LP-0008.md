@@ -75,7 +75,13 @@ agent with real proofs on LEZ v0.2.0. In brief:
   gate holds above-limit spends for approval and runs below-limit spends autonomously.
 - **F6-F8:** 21 documented skills; A2A-compatible Agent Card + task lifecycle over Logos
   Messaging; two agents discover each other (`peer_count=1`), open a task, and pay autonomously
-  with a real proof.
+  with a real proof. **Verified INTEGRATED on the live v0.2.0 testnet** (`tests/demo-f8-testnet.sh`):
+  two daemons, Waku discovery (`peer_count=1`), the A2A task against the discovered card, and the
+  spending gate HOLDING an over-limit task (`pending_approvals=1`) — all on the hosted chain, agent
+  funded from genesis with a real proof (e.g. tx `4713a49f…`, `e83768f9…` getTransaction-confirmed).
+  The in-module pay hop is capped by the ~20s inter-module RPC window vs 90s+ real proofs
+  (documented below); the complete payment flow runs end-to-end on the local chain
+  (`tests/demo-f8-linux-full.sh`) and as a real on-chain transfer in the primary demo.
 - **F9-F11:** storage, messaging, and blockchain use cases demonstrated end-to-end; three shielded
   agents (one per category) funded from genesis on the **live v0.2.0 testnet**, every funding tx
   `getTransaction`-confirmed (`docs/TESTNET_EVIDENCE_V020.md`); also reproducible on a standalone
