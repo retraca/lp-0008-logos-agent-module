@@ -50,11 +50,16 @@ pkill -9 -f "logoscore -D" 2>/dev/null; sleep 2; rm -rf "$HOME/.logoscore"
 
 say "F1 — boot the daemon and load the modules"
 RISC0_DEV_MODE=0 "$LOGOSCORE" -D -m "$MODULES_DIR" >/tmp/lp0008-tn-daemon.log 2>&1 & disown
-sleep 8
-for m in storage_module lez_wallet_module agent_module; do "$LOGOSCORE" load-module "$m" >/dev/null 2>&1; done
-sleep 3
-LOADED=$("$LOGOSCORE" status 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin)['modules_summary'];print(d['loaded'],d['crashed'])" 2>/dev/null)
-echo "$LOADED" | grep -qE "^[0-9]+ 0$" || die "modules did not load cleanly: $LOADED"
+# cold boot after a fresh build can exceed a fixed sleep — retry load+status until clean
+LOADED=""
+for i in $(seq 1 12); do
+  sleep 8
+  for m in storage_module lez_wallet_module agent_module; do "$LOGOSCORE" load-module "$m" >/dev/null 2>&1; done
+  sleep 3
+  LOADED=$("$LOGOSCORE" status 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin)['modules_summary'];print(d['loaded'],d['crashed'])" 2>/dev/null)
+  echo "$LOADED" | grep -qE "^[3-9] 0$" && break
+done
+echo "$LOADED" | grep -qE "^[3-9] 0$" || die "modules did not load cleanly: $LOADED"
 ok "modules loaded (loaded crashed): $LOADED"
 
 say "F2 — the agent's own shielded account + point its wallet at the testnet"
@@ -65,9 +70,12 @@ echo "{\"sequencer_addr\":\"$TESTNET\",\"seq_poll_timeout\":\"60s\",\"seq_tx_pol
 # restart so the module picks up the testnet endpoint
 pkill -9 -f "logoscore -D" 2>/dev/null; sleep 3
 RISC0_DEV_MODE=0 "$LOGOSCORE" -D -m "$MODULES_DIR" >/tmp/lp0008-tn-daemon2.log 2>&1 & disown
-sleep 8
-for m in storage_module lez_wallet_module agent_module; do "$LOGOSCORE" load-module "$m" >/dev/null 2>&1; done
-sleep 3
+for i in $(seq 1 12); do
+  sleep 8
+  for m in storage_module lez_wallet_module agent_module; do "$LOGOSCORE" load-module "$m" >/dev/null 2>&1; done
+  sleep 3
+  "$LOGOSCORE" status 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin)['modules_summary'];exit(0 if d['loaded']>=3 and d['crashed']==0 else 1)" 2>/dev/null && break
+done
 "$LOGOSCORE" call lez_wallet_module ensure_account >/dev/null 2>&1; sleep 2
 read -r ANPK AVPK < <("$LOGOSCORE" call agent_module agent_card 2>&1 | python3 -c "import sys,json
 d=json.load(sys.stdin); r=json.loads(d['result'])['result']; i=r.get('x-lez-identity',{})
