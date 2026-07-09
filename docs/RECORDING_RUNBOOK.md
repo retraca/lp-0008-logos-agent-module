@@ -15,8 +15,13 @@ tmux new -A -s rec        # if the connection drops: reconnect and `tmux new -A 
 # plain -logos-logoscore-cli one supports our module variant (linux-amd64-dev); the
 # "portable-bundle" one GLIBC-crashes and the "cli-bin-portable" one rejects the modules:
 export LOGOSCORE_BIN=/nix/store/841y6inhnzhwsdisgs68gkx51244z75r-logos-logoscore-cli/bin/logoscore
-export LEZ_BUILD=~/logos-execution-zone MODULES_DIR=~/lp0008-modules
+export LEZ_BUILD=~/logos-execution-zone
 export PATH="$HOME/.cargo/bin:$PATH"
+
+# fresh clone for the take (NOTE: ~/lp0008 is an OLD monorepo dir — do not use it).
+# ~/lp0008-clean already exists verified; re-clone on camera if you want the clone visible:
+git clone https://github.com/retraca/lp-0008-logos-agent-module ~/lp0008-demo
+cd ~/lp0008-demo
 ```
 
 Each video is ONE paste — the script prints its own step headers, so you narrate over them
@@ -50,7 +55,7 @@ is on screen:
 Paste:
 
 ```bash
-cd ~/lp0008 && RISC0_DEV_MODE=0 ./demo.sh
+cd ~/lp0008-demo && RISC0_DEV_MODE=0 ./demo.sh
 ```
 
 Say, as each on-screen header appears:
@@ -104,7 +109,7 @@ at the bottom).
 Paste:
 
 ```bash
-cd ~/lp0008 && LEZ_BUILD=~/logos-execution-zone bash tests/demo-f8-testnet.sh
+cd ~/lp0008-demo && bash tests/demo-f8-testnet.sh
 ```
 
 Say over the on-screen stages:
@@ -133,7 +138,7 @@ runs fully on the hosted testnet.
 Paste:
 
 ```bash
-cd ~/lp0008 && bash tests/demo-f8-linux-full.sh
+cd ~/lp0008-demo && bash tests/demo-f8-linux-full.sh
 ```
 
 - (storage segment) "Use case: the personal file vault. The owner hands the agent a
