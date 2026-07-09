@@ -88,7 +88,10 @@ say "agent A balance through its module: ${ABAL:-0}"
 [ "${ABAL:-0}" != "0" ] || say "STAGE3.5_WARN: A note not synced — pay/gate stages will likely stall"
 
 st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is held)"
-"$LC" --config-dir ~/cfgA call agent_module meta_configure per_tx_limit 50 >/dev/null 2>&1
+# NB: bare numerics fail the CLI JSON type check (type must be string); the module's
+# parse_amount strips one pair of surrounding quotes, so pass the value as '"50"'.
+"$LC" --config-dir ~/cfgA call agent_module meta_configure per_tx_limit '"50"' >~/limitset.log 2>&1
+grep -q '"per_tx_limit"' ~/limitset.log && say "per_tx_limit set ok" || say "STAGE4_FAIL: per_tx_limit not set: $(tail -c 200 ~/limitset.log)"
 "$LC" --config-dir ~/cfgA call agent_module meta_configure agent_npk "$ANPK" >/dev/null 2>&1
 
 st "STAGE 5: local Waku — two delivery nodes, B statically connects to A"
