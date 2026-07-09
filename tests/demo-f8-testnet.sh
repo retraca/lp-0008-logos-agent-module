@@ -82,13 +82,17 @@ st "STAGE 4: set agent A per_tx_limit=50 (so a 5 LEZ pay is autonomous, an 80 is
 
 st "STAGE 5: local Waku — two delivery nodes, B statically connects to A"
 "$LC" --config-dir ~/cfgA call delivery_module createNode '{"logLevel":"ERROR","mode":"Core","relay":true,"clusterId":16,"numShardsInNetwork":8,"tcpPort":60010,"discv5UdpPort":60011,"restPort":60012,"metricsServerPort":60013,"websocketPort":60014}' >~/nodeA.log 2>&1
-# the multiaddr is logged by the daemon, not returned by the RPC — poll daemonA.log (cf. demo-f8-linux-full.sh)
+"$LC" --config-dir ~/cfgA call delivery_module start >/dev/null 2>&1; sleep 6
+# the node logs its multiaddr only after `start`, into the RUNNING daemon's stdout log
+# (boot() restarts once, so the live log is the newest ~/daemonA*.log — cf. demo-f8-linux-full.sh:126)
 APID=""
-for k in $(seq 1 15); do APID=$(grep -oE '/p2p/16Uiu2[A-Za-z0-9]+' ~/daemonA.log 2>/dev/null | head -1 | sed 's#/p2p/##'); [ -n "$APID" ] && break; sleep 2; done
+for k in $(seq 1 15); do APID=$(grep -ohE '/p2p/16Uiu2[A-Za-z0-9]+' $(ls -t ~/daemonA*.log 2>/dev/null) 2>/dev/null | head -1 | sed 's#/p2p/##'); [ -n "$APID" ] && break; sleep 2; done
 say "agent A waku peer id: ${APID:-NONE}"
-[ -n "$APID" ] || { say "STAGE5_FAIL: no waku peer id in daemonA.log"; }
+[ -n "$APID" ] || { say "STAGE5_FAIL: no waku peer id in daemonA logs"; }
 "$LC" --config-dir ~/cfgB call delivery_module createNode "{\"logLevel\":\"ERROR\",\"mode\":\"Core\",\"relay\":true,\"clusterId\":16,\"numShardsInNetwork\":8,\"tcpPort\":60020,\"discv5UdpPort\":60021,\"restPort\":60022,\"metricsServerPort\":60023,\"websocketPort\":60024,\"staticnodes\":[\"/ip4/127.0.0.1/tcp/60010/p2p/$APID\"]}" >~/nodeB.log 2>&1
-sleep 6
+"$LC" --config-dir ~/cfgB call delivery_module start >/dev/null 2>&1; sleep 8
+"$LC" --config-dir ~/cfgA call delivery_module subscribe "$TOPIC" >/dev/null 2>&1
+"$LC" --config-dir ~/cfgB call delivery_module subscribe "$TOPIC" >/dev/null 2>&1; sleep 8
 
 st "STAGE 6: agents discover each other (F8)"
 PC=0
