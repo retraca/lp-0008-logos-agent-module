@@ -34,7 +34,8 @@ pkill -9 -f "logoscore -D" 2>/dev/null; sleep 3
 
 LM(){ for m in storage_module delivery_module lez_wallet_module agent_module; do timeout 60 "$LC" --config-dir "$1" load-module "$m" >/dev/null 2>&1; done; }
 boot(){ # $1=tag (A|B)  — every call timeout-guarded so a not-ready daemon can't hang the script
-  local tag="$1" cd=~/cfg$tag pp=~/data$tag
+  local tag="$1"
+  local cd="$HOME/cfg$tag" pp="$HOME/data$tag"
   rm -rf "$cd" "$pp"; mkdir -p "$cd" "$pp"
   echo "  boot$tag: daemon1" >>"$R"
   RISC0_DEV_MODE=0 "$LC" -D -m "$MD" --config-dir "$cd" --persistence-path "$pp" >~/daemon$tag.log 2>&1 & disown
