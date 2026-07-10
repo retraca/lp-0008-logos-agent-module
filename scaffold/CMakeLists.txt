@@ -12,6 +12,9 @@ logos_module(
     SOURCES
         src/agent_module_impl.h
         src/agent_module_impl.cpp
+        src/card_signing.h
+        src/tweetnacl.h
+        src/tweetnacl.c
     INCLUDE_DIRS
         interfaces
 )

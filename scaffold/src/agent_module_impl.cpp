@@ -18,6 +18,7 @@
 // LEARNING.md S2b and S4 examples verbatim.
 
 #include "agent_module_impl.h"
+#include "card_signing.h"
 
 // Generated SDK header providing modules(), bind_lez_wallet(), etc.
 // Included from sdk_generated/ at build time (logos-cpp-generator --general-only).
@@ -1141,6 +1142,34 @@ std::string AgentModuleImpl::agent_card() {
             {"security",    json::array({json::object({{"lez-key", json::array()}})})},
             {"createdAt",   utc_now_iso()}
         };
+
+        // A2A AgentCardSignature (RFC 7515 detached JWS, EdDSA/Ed25519). The agent
+        // generates its signing key once and persists it in the module config; the
+        // public key rides along as a JWK so any A2A client can verify offline.
+        try {
+            std::string pk = impl_->cfg("agent_sign_pk");
+            std::string sk = impl_->cfg("agent_sign_sk");
+            if (pk.empty() || sk.empty()) {
+                auto kp = cardsig::generate();
+                pk = kp.pk_hex; sk = kp.sk_hex;
+                impl_->config["agent_sign_pk"] = pk;
+                impl_->config["agent_sign_sk"] = sk;
+                impl_->save_config();
+            }
+            std::string payload_b64 = cardsig::b64url(card.dump());
+            json prot = {{"alg","EdDSA"},{"typ","JOSE"},{"kid",npk_val.substr(0, npk_val.size() < 16 ? npk_val.size() : 16)}};
+            std::string prot_b64 = cardsig::b64url(prot.dump());
+            std::string signing_input = prot_b64 + "." + payload_b64;
+            std::string sig = cardsig::sign_detached_b64url(signing_input, sk);
+            // self-check: never publish a signature that does not verify
+            if (cardsig::verify_detached(signing_input, sig, pk)) {
+                card["signatures"] = json::array({{
+                    {"protected", prot_b64},
+                    {"signature", sig},
+                    {"header", {{"jwk", {{"kty","OKP"},{"crv","Ed25519"},{"x", cardsig::b64url(cardsig::unhex(pk).data(), 32)}}}}}
+                }});
+            }
+        } catch (...) { /* unsigned card is still a valid card; signing is best-effort */ }
 
         return ok(card);
     } catch (const std::exception& e) {
