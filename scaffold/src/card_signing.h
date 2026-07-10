@@ -17,12 +17,12 @@ extern "C" {
 #include "tweetnacl.h"
 }
 
-// TweetNaCl requires the embedder to provide randombytes().
-extern "C" inline void randombytes(unsigned char* buf, unsigned long long n) {
-    std::ifstream ur("/dev/urandom", std::ios::binary);
-    if (!ur.read(reinterpret_cast<char*>(buf), static_cast<std::streamsize>(n)))
-        throw std::runtime_error("randombytes: /dev/urandom read failed");
-}
+// TweetNaCl requires the embedder to provide randombytes(). Declared here with C
+// linkage; DEFINED (non-inline) in agent_module_impl.cpp so the C object file
+// tweetnacl.o resolves the symbol at link time — an inline definition is not
+// guaranteed to be emitted and leaves the .so with an undefined symbol that only
+// explodes on the first agent_card call.
+extern "C" void randombytes(unsigned char* buf, unsigned long long n);
 
 namespace cardsig {
 

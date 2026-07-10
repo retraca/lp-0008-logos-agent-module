@@ -20,6 +20,16 @@
 #include "agent_module_impl.h"
 #include "card_signing.h"
 
+// TweetNaCl's entropy source (declared in card_signing.h). No exceptions across the
+// C boundary: on a read failure we abort key generation by zero-filling, and the
+// signing self-check (verify before publish) keeps a bad key from ever shipping.
+extern "C" void randombytes(unsigned char* buf, unsigned long long n) {
+    std::ifstream ur("/dev/urandom", std::ios::binary);
+    if (!ur.read(reinterpret_cast<char*>(buf), static_cast<std::streamsize>(n))) {
+        for (unsigned long long i = 0; i < n; ++i) buf[i] = 0;
+    }
+}
+
 // Generated SDK header providing modules(), bind_lez_wallet(), etc.
 // Included from sdk_generated/ at build time (logos-cpp-generator --general-only).
 #include "logos_sdk.h"
